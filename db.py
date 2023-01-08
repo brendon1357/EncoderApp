@@ -9,8 +9,8 @@ cursor.execute('''
 CREATE TABLE IF NOT EXISTS user(
 userID INTEGER PRIMARY KEY,
 username VARCHAR(20) NOT NULL,
-password VARCHAR(20) NOT NULL,
-key VARCHAR(20));
+password VARCHAR(24) NOT NULL,
+key VARCHAR(100));
 ''')
 
 cursor.execute('pragma encoding=UTF16')
