@@ -2,23 +2,34 @@ import sqlite3
 import collections
 import random
 import string
+import os
+import json
 import customtkinter as tk
 from cryptography.fernet import Fernet
 from tkinter import messagebox
 
+def readSecrets() -> dict:
+	file = os.path.join("secrets.json")
+	try:
+		with open(file, mode='r') as f:
+			return json.loads(f.read())
+	except FileNotFoundError:
+		return {}
+
+
 # key used to decrypt database information
-DATABASE_KEY = b'ydp8TlGve70o-viJZYk_pM3uRsDMJ-il9imb9otGRic='
+DATABASE_KEY = readSecrets().get("DB_KEY").encode("utf-8")
 
 # decrypts a previously encoded string to it's original form
 def decryptMessage(encryptedPassword, key):
 	f = Fernet(key)
 	decryptedPassword = f.decrypt(encryptedPassword)
 
-	return decryptedPassword.decode()
+	return decryptedPassword.decode("utf-8")
 
 # encrypts inputted string into bytes.
 def encryptMessage(password, key):
-	encodedPassword = password.encode()
+	encodedPassword = password.encode("utf-8")
 	f = Fernet(key)
 	encodedPassword = f.encrypt(encodedPassword)
 
@@ -96,7 +107,7 @@ class Root(tk.CTk):
 	def setUsernameForFrame(self, name, username):
 		self.frames[name].setUsername(username)
 
-	place window at the center of the screen
+	#place window at the center of the screen
 	def centerWindow(self):
 		self.update_idletasks()
 		width = self.winfo_reqwidth()
@@ -105,7 +116,7 @@ class Root(tk.CTk):
 		y = (self.winfo_screenheight() // 2) - (height // 2)
 		self.geometry('+{}+{}'.format( x, y))
 
-
+ 
 # frame that displays information on how to use the application
 class InformationScreen(tk.CTkFrame):
 	def __init__(self, parent, controller, height, width):
