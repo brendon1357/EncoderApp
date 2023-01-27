@@ -14,7 +14,7 @@ pip install customtkinter
 pip install fernet
 ```
 
-Start by running
+Clone repository, change directories into project directory, setup project by running
 ```
 python setup.py
 ```
