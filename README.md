@@ -8,7 +8,7 @@ Purpose of this project was to learn about modern GUI development in Python, cry
 
 Fernet library and CustomTkinter library need to be installed prior to running program.
 
-On windows, with pip run
+On windows using CMD terminal with pip, run the following commands to install both libraries
 ```
 pip install customtkinter
 pip install fernet
