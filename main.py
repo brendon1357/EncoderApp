@@ -21,7 +21,7 @@ def readSecrets() -> dict:
 DATABASE_KEY = readSecrets().get("DB_KEY").encode("utf-8")
 
 # decrypts a previously encoded string to it's original form
-def decryptMessage(encryptedPassword, key):
+def decryptMessage(encryptedPassword, key): 
 	f = Fernet(key)
 	decryptedPassword = f.decrypt(encryptedPassword)
 
@@ -123,18 +123,17 @@ class InformationScreen(tk.CTkFrame):
 		tk.CTkFrame.__init__(self, parent, height=height, width=width)
 
 		infoLabel = tk.CTkLabel(self, text="User Instructions", font=("Arial", 30, "bold"))
-		infoLabel.place(relx=0.50, rely=0.10, anchor=tk.CENTER)
+		infoLabel.place(relx=0.07, rely=0.10, anchor=tk.W)
 
-		textBox = tk.CTkTextbox(self, wrap="word", width=325, height=500, activate_scrollbars=False)
-		textBox.place(relx=0.50, rely=0.70, anchor=tk.CENTER)
-		textBox.insert("0.0", "Generate a new password by clicking the Generate Password button. ")
-		textBox.insert("end", "Doing so will give you your true password and your encoded password. Your true password is what will be ")
-		textBox.insert("end", "used to create some account (not for this app). You will create an account with the true password and store the encoded password.\n\n")
-		textBox.insert("end", "The encoded password ")
-		textBox.insert("end", "should be stored somewhere easily retrievable, along with the specific account you're using the password for ")
+		textBox = tk.CTkTextbox(self, wrap="word", width=325, font=("Arial", 16), height=500, activate_scrollbars=False)
+		textBox.place(relx=0.05, rely=0.65, anchor=tk.W)
+		textBox.insert("0.0", "Generate a new password by clicking the Generate button. ")
+		textBox.insert("end", "Doing so will give you your true password and your encrypted password. Your true password is what will be ")
+		textBox.insert("end", "used to create some account (not for this app). You will create an account with the true password and store the encrypted password.\n\n")
+		textBox.insert("end", "The encrypted password should be stored somewhere easily retrievable, along with the specific account you're using the password for ")
 		textBox.insert("end", "so you know what account it is associated with.\n\n")
-		textBox.insert("end", "When you wish to log into an account you created with a generated password from here, you must get the encoded password ")
-		textBox.insert("end", "wherever you have it stored, then log back into this app, paste the encoded password in the decode field and press Decode. ")
+		textBox.insert("end", "When you wish to log into an account you created with a generated password from here, you must get the encrypted password ")
+		textBox.insert("end", "wherever you have it stored, then log back into this app, paste the encrypted password in the decrypt field and press Decrypt. ")
 		textBox.insert("end", "This will give you your true password which you can then use.")
 		textBox.configure(fg_color="gray20", state="disabled")
 
@@ -166,7 +165,7 @@ class PasswordManagementScreen(tk.CTkFrame):
 		passwordField.configure(state="readonly")
 		passwordField.place(relx=0.95, rely=0.25, anchor=tk.E)
 
-		encodeField = tk.CTkEntry(self, placeholder_text="Encoded password will appear here, store this somewhere safe", width=450)
+		encodeField = tk.CTkEntry(self, placeholder_text="Encrypted password will appear here, store this somewhere safe", width=450)
 		encodeField.configure(state="readonly")
 		encodeField.place(relx=0.95, rely=0.40, anchor=tk.E)
 
@@ -177,10 +176,10 @@ class PasswordManagementScreen(tk.CTkFrame):
 			command=lambda: self.passwordGenerator(int(slider.get()), passwordField, encodeField))
 		generateButton.place(relx=0.05, rely=0.25, anchor=tk.W)
 
-		decodeField = tk.CTkEntry(self, placeholder_text="Paste encoded password here to get true password back", width=450)
+		decodeField = tk.CTkEntry(self, placeholder_text="Paste encrypted password here to get true password back", width=450)
 		decodeField.place(relx=0.95, rely=0.60, anchor=tk.E)
 
-		decodePassButton = tk.CTkButton(self, text="Decode", font=("Arial", 16, "bold"), command=lambda: self.decodePassword(decodeField, self.key))
+		decodePassButton = tk.CTkButton(self, text="Decrypt", font=("Arial", 16, "bold"), command=lambda: self.decodePassword(decodeField, self.key))
 		decodePassButton.place(relx=0.05, rely=0.60, anchor=tk.W)
 
 	# set the key
