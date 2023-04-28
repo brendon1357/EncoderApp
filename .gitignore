@@ -1,2 +1,3 @@
-secrets.json
-Database.db
+secrets.env
+trust_store
+*.pem
