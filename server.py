@@ -9,6 +9,7 @@ import re
 from db import readSecrets, getDB
 from cryptography.fernet import Fernet
 
+# Class to handle clients in a new thread for each client
 class HandleClient(threading.Thread):
 	def __init__(self, clientSock, address):
 		threading.Thread.__init__(self)
@@ -36,7 +37,8 @@ class HandleClient(threading.Thread):
 			print("Client " + self.address[0] + " successfully registered")
 			self.sock.sendall(b'Successfully registered')
 	
-		except mysql.connector.Error as e:
+		except Exception as e:
+			self.sock.sendall(b'Server error')
 			print("Error: {}".format(e))
 
 	# adds the user to the database if the user doesn't already exist
@@ -57,7 +59,8 @@ class HandleClient(threading.Thread):
 			else:
 				self.insertUser(username, password)
 
-		except mysql.connector.Error as e:
+		except Exception as e:
+			self.sock.sendall(b'Server error')
 			print("Error: {}".format(e))
 
 	# check for successful login
@@ -87,7 +90,8 @@ class HandleClient(threading.Thread):
 				print("Client " + self.address[0] + " failed to login")
 				self.sock.sendall(b'Username or password does not exist')
 
-		except mysql.connector.Error as e:
+		except Exception as e:
+			self.sock.sendall(b'Server error')
 			print("Error: {}".format(e))
 
 	# save the given password and password label in the database for the given user
@@ -97,11 +101,12 @@ class HandleClient(threading.Thread):
 			print("Could not connect to database")
 			return
 		try:
-			cursor = connection.cursor()
-			selectUserIDQuery = "SELECT id FROM userstable WHERE username = %s"
-			cursor.execute(selectUserIDQuery, (username,))
-			userID = cursor.fetchone()[0]
+			userID = self.getUserID(username)
+			if userID is None:
+				print("Could not retrieve user id")
+				return
 
+			cursor = connection.cursor()
 			selectKeyQuery = "SELECT encryptionkey FROM encryptionkeys WHERE userID = %s"
 			cursor.execute(selectKeyQuery, (userID,))
 			key = cursor.fetchone()
@@ -132,7 +137,8 @@ class HandleClient(threading.Thread):
 				print("Client " + self.address[0] + " password save successfully for: " + username)
 				self.sock.sendall(b'Password saved')
 
-		except mysql.connector.Error as e:
+		except Exception as e:
+			self.sock.sendall(b'Server error')
 			print("Error: {}".format(e))
 
 	# return true if given string is a valid password otherwise return false
@@ -141,6 +147,82 @@ class HandleClient(threading.Thread):
 			return False
 		symbols = r'[@!#$%&-]'
 		return bool(re.search(symbols, str))
+
+	# send the users passwords over socket to them
+	def sendPasswords(self, username):
+		connection = getDB()
+		if connection is None:
+			print("Could not connect to database")
+			return
+		try:
+			userID = self.getUserID(username)
+			if userID is None:
+				print("Could not retrieve user id")
+				return
+
+			cursor = connection.cursor()
+			selectPasswordsQuery = "SELECT encryptedPassword, label FROM passwordstable WHERE userID = %s"
+			cursor.execute(selectPasswordsQuery, (userID,))
+			passwords = cursor.fetchall()
+
+			passwordData = []
+			for encryptedPassword, label in passwords:
+				passwordData.append({"encryptedPassword": encryptedPassword, "label": label})
+
+			jsonData = json.dumps(passwordData)
+			self.sock.sendall(jsonData.encode())
+
+			print("Client " + self.address[0] + " passwords were sent successfully: " + username)
+
+		except Exception as e:
+			self.sock.sendall(b'Server error')
+			print("Error: {}".format(e))
+
+	# decrypt the given password for the given user and send it over socket
+	def decryptPassword(self, username, password):
+		connection = getDB()
+		if connection is None:
+			print("Could not connect to database")
+			return
+		try:
+			userID = self.getUserID(username)
+			if userID is None:
+				print("Could not retrieve user id")
+				return
+
+			cursor = connection.cursor()
+			selectKeyQuery = "SELECT encryptionkey FROM encryptionkeys WHERE userID = %s"
+			cursor.execute(selectKeyQuery, (userID,))
+			encryptionKey = cursor.fetchone()[0]
+
+			f = Fernet(encryptionKey)
+			decryptedPassword = f.decrypt(password).decode()
+
+			passwordData = {"msg": "Password decrypted", "password": decryptedPassword}
+			jsonData = json.dumps(passwordData)
+			self.sock.sendall(jsonData.encode())
+
+			print("Client " + self.address[0] + " decrypted a password successfully: " + username)
+
+		except Exception as e:
+			self.sock.sendall(b'Server error')
+			print("Error: {}".format(e))
+
+	# get user id for given username
+	def getUserID(self, username):
+		connection = getDB()
+		if connection is None:
+			print("Could not connect to database")
+			return None
+		try:
+			cursor = connection.cursor()
+			selectUserIDQuery = "SELECT id FROM userstable WHERE username = %s"
+			cursor.execute(selectUserIDQuery, (username,))
+			return cursor.fetchone()[0]
+
+		except Exception as e:
+			print("Error: {}".format(e))
+			return None
 
 	# keep listening for messages from the client and handle requests
 	def run(self):
@@ -188,6 +270,21 @@ class HandleClient(threading.Thread):
 					else:
 						print("Client " + self.address[0] + " attempting to save a password with username: " + username)
 						self.savePassword(username, password, label)
+
+				elif jsonData["type"] == "Get passwords":
+					username = jsonData["username"]
+					print("Client " + self.address[0] + " attempting to retrieve passwords: " + username)
+					self.sendPasswords(username)
+
+				elif jsonData["type"] == "Decrypt password":
+					username = jsonData["username"]
+					password = jsonData["password"]
+					print("Client " + self.address[0] + " attempting to decrypt a password: " + username)
+					if (len(password) <= 24):
+						print("Client " + self.address[0] + " password was already decrypted: " + username)
+						self.sock.sendall(b'Already decrypted')
+					else:
+						self.decryptPassword(username, password)
 
 
 # the server class

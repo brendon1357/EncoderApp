@@ -5,6 +5,7 @@ import socket
 import ssl
 import json
 from tkinter import messagebox
+from functools import partial
 
 # the root window of the application
 class Root(tk.CTk):
@@ -32,9 +33,13 @@ class Root(tk.CTk):
 
         passwordManagementFrame = PasswordManagementScreen(container, self, 500, 700, self.socket)
         self.frames[PasswordManagementScreen] = passwordManagementFrame
+        self.createFrame(PasswordManagementScreen, 0, 0, (25, 25), 25)
+        self.hideFrame(PasswordManagementScreen)
 
-        passwordViewFrame = ViewPasswordsScreen(container, self, 500, 700, self.socket)
+        passwordViewFrame = ViewPasswordsScreen(container, self, 500, 825, self.socket)
         self.frames[ViewPasswordsScreen] = passwordViewFrame
+        self.createFrame(ViewPasswordsScreen, 0, 0, (25, 25), 25)
+        self.hideFrame(ViewPasswordsScreen)
 
     # create a frame and add it to the grid at given row and col
     def createFrame(self, name, row, col, padx, pady):
@@ -62,6 +67,9 @@ class Root(tk.CTk):
     def setUsernameForFrame(self, name, username):
         self.frames[name].setUsername(username)
 
+    def setupPasswordDisplay(self, passwords):
+        self.frames[ViewPasswordsScreen].displayPasswords(passwords)
+
     # place window at the center of the screen
     def centerWindow(self):
         self.update_idletasks()
@@ -72,17 +80,87 @@ class Root(tk.CTk):
         self.geometry('+{}+{}'.format( x, y))
 
 
-class ViewPasswordsScreen(tk.CTkFrame):
+# the frame to view all of the users saved passwords
+class ViewPasswordsScreen(tk.CTkScrollableFrame):
     def __init__(self, parent, controller, height, width, socket):
-        tk.CTkFrame.__init__(self, parent, height=height, width=width)
-        self.username = ""
+        tk.CTkScrollableFrame.__init__(self, parent, height=height, width=width)
         self.socket = socket
+        self.username = ""
+
+        self.successLabel = tk.CTkLabel(self, text="", font=("Arial", 14, "bold"), text_color="green")
+        self.successLabel.grid(row=0, column=0, sticky="e")
+
+        backButton = tk.CTkButton(self, text="Go Back", font=("Arial", 16, "bold"), height=32, 
+            command=lambda: self.goBack(controller))
+        backButton.grid(row=0, column=0, pady=(0, 20), sticky="w")
+
+    # display all of the users saved passwords
+    def displayPasswords(self, passwords):
+        for i, password in enumerate(passwords, start=1):
+            encryptedPassword = password["encryptedPassword"]
+            label = password["label"]
+
+            listLabel = tk.CTkLabel(self, text=label, font=("Arial", 14, "bold"))
+            if (i == 1):
+                listLabel.grid(row=i, column=0, pady=(0, 0), sticky="w")
+            else:
+                listLabel.grid(row=i, column=0, pady=(40, 0), sticky="w")
+  
+            listPassword = tk.CTkEntry(self, width=500)
+            listPassword.insert(tk.END, encryptedPassword)
+            listPassword.configure(state="readonly")
+            listPassword.grid(row=i+1, column=0, pady=(0, 40))
+
+            decryptButton = tk.CTkButton(self, text="Decrypt", font=("Arial", 16, "bold"), height=32, 
+            command=partial(self.decryptPassword, listPassword))
+            decryptButton.grid(row=i+1, column=1, pady=(0, 40), padx=20)
+
+            copyButton = tk.CTkButton(self, text="Copy", font=("Arial", 16, "bold"), height=32, 
+            command=partial(self.copyPassword, listPassword))
+            copyButton.grid(row=i+1, column=2, pady=(0, 40), padx=(0, 20))
+
+    # send a request to decrypt given password
+    def decryptPassword(self, passwordEntry):
+        try:
+            data = {"type": "Decrypt password", "username": self.username, "password": passwordEntry.get()}
+            jsonData = json.dumps(data)
+            self.socket.sendall(jsonData.encode())
+            msg = self.socket.recv(2048).decode()
+            if msg == "Already decrypted":
+                return
+
+            jsonData = json.loads(msg)
+
+            if (jsonData["msg"] == "Password decrypted"):
+                passwordEntry.configure(state="normal")
+                passwordEntry.delete(0, len(passwordEntry.get()))
+                passwordEntry.insert(0, jsonData["password"])
+                passwordEntry.configure(state="readonly")
+            else:
+                messagebox.showerror(title="Error", message=msg)
+
+        except Exception as e:
+            print(e)
+            self.socket.close()
+
+    # copy password to clipboard
+    def copyPassword(self, passwordEntry):
+        self.clipboard_clear()
+        self.clipboard_append(passwordEntry.get())
+        self.successLabel.configure(text="Password copied to clipboard")
 
     # set the username
     def setUsername(self, username):
         self.username = username
 
+    # go back to the password management screen
+    def goBack(self, controller):
+        self.successLabel.configure(text="")
+        controller.hideFrame(ViewPasswordsScreen)
+        controller.showFrame(PasswordManagementScreen)
 
+
+# the frame for registering an account
 class RegistrationScreen(tk.CTkFrame):
     def __init__(self, parent, controller, height, width, socket):
         tk.CTkFrame.__init__(self, parent, height=height, width=width)
@@ -150,6 +228,7 @@ class PasswordManagementScreen(tk.CTkFrame):
     def __init__(self, parent, controller, height, width, socket):
         tk.CTkFrame.__init__(self, parent, height=height, width=width)
         self.username = ""
+        self.passwords = []
         self.socket = socket
         sliderValue = tk.IntVar()
         sliderValue.set(8)
@@ -190,8 +269,33 @@ class PasswordManagementScreen(tk.CTkFrame):
             command=lambda: self.savePassword(passwordField, generatedPasswordLabelEntry, errorLabel, successLabel))
         saveButton.place(relx=0.35, rely=0.75, anchor=tk.CENTER)
 
-        viewButton = tk.CTkButton(self, text="View Passwords", font=("Arial", 16, "bold"), width=160, height=32)
+        viewButton = tk.CTkButton(self, text="View Passwords", font=("Arial", 16, "bold"), width=160, height=32,
+            command=lambda: self.viewPasswords(controller, errorLabel, successLabel))
         viewButton.place(relx=0.65, rely=0.75, anchor=tk.CENTER)
+
+    # send a request to retrieve the users passwords so they can be viewed
+    def viewPasswords(self, controller, errorLabel, successLabel):
+        try:
+            data = {"type": "Get passwords", "username": self.username}
+            jsonData = json.dumps(data)
+            self.socket.sendall(jsonData.encode())
+            msg = self.socket.recv(2048).decode()
+            try:
+                passwords = json.loads(msg)
+                self.passwords = passwords
+                # hide this frame and setup password view frame
+                controller.hideFrame(PasswordManagementScreen)
+                controller.setupPasswordDisplay(passwords)
+                controller.showFrame(ViewPasswordsScreen)
+                errorLabel.configure(text="")
+                successLabel.configure(text="")
+            except json.JSONDecodeError:
+                messagebox.showerror(title="Error", message=msg)
+            
+        except Exception as e:
+            print(e)
+            self.socket.close()
+            errorLabel.configure(text="Error connecting to server")
 
     # set the username
     def setUsername(self, username):
