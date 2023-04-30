@@ -280,17 +280,14 @@ class PasswordManagementScreen(tk.CTkFrame):
             jsonData = json.dumps(data)
             self.socket.sendall(jsonData.encode())
             msg = self.socket.recv(2048).decode()
-            try:
-                passwords = json.loads(msg)
-                self.passwords = passwords
-                # hide this frame and setup password view frame
-                controller.hideFrame(PasswordManagementScreen)
-                controller.setupPasswordDisplay(passwords)
-                controller.showFrame(ViewPasswordsScreen)
-                errorLabel.configure(text="")
-                successLabel.configure(text="")
-            except json.JSONDecodeError:
-                messagebox.showerror(title="Error", message=msg)
+            passwords = json.loads(msg)
+            self.passwords = passwords
+            # hide this frame and setup password view frame
+            controller.hideFrame(PasswordManagementScreen)
+            controller.setupPasswordDisplay(passwords)
+            controller.showFrame(ViewPasswordsScreen)
+            errorLabel.configure(text="")
+            successLabel.configure(text="")
             
         except Exception as e:
             print(e)
