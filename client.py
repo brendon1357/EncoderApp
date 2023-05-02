@@ -68,6 +68,7 @@ class Root(tk.CTk):
     def setUsernameForFrame(self, name, username):
         self.frames[name].setUsername(username)
 
+    # call the displayPasswords method for the ViewPasswordsScreen class
     def setupPasswordDisplay(self, passwords):
         self.frames[ViewPasswordsScreen].displayPasswords(passwords)
 
@@ -92,6 +93,9 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
         self.successLabel = tk.CTkLabel(self, text="", font=("Arial", 14, "bold"), text_color="green")
         self.successLabel.grid(row=0, column=0, sticky="e")
 
+        self.errorLabel = tk.CTkLabel(self, text="", font=("Arial", 14, "bold"), text_color="#ff4242")
+        self.errorLabel.grid(row=0, column=0, sticky="e")
+
         backButton = tk.CTkButton(self, text="Go Back", font=("Arial", 16, "bold"), height=32, 
             command=lambda: self.goBack())
         backButton.grid(row=0, column=0, pady=(0, 20), sticky="w")
@@ -102,8 +106,8 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
             encryptedPassword = password["encryptedPassword"]
             label = password["label"]
 
-            listLabel = tk.CTkLabel(self, text=label, font=("Arial", 14, "bold"))
-            if (i == 1):
+            listLabel = tk.CTkLabel(self, text=label, font=("Arial", 14, "bold"), cursor="hand2")
+            if i == 1:
                 listLabel.grid(row=i, column=0, pady=(0, 0), sticky="w")
             else:
                 listLabel.grid(row=i, column=0, pady=(40, 0), sticky="w")
@@ -121,6 +125,31 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
             command=partial(self.copyPassword, listPassword))
             copyButton.grid(row=i+1, column=2, pady=(0, 40), padx=(0, 20))
 
+            listLabel.bind("<Button-1>", command=partial(self.modifyLabel, listLabel))
+
+    # send a request to modify/update a label for a saved password
+    def modifyLabel(self, label, event):
+        dialog = tk.CTkInputDialog(text="Enter a new label name below", title="Modify Label")
+
+        dialogInput = dialog.get_input()
+        # if the user clicks cancel or dialog input is somehow empty then don't send any requests
+        if dialogInput == None or dialogInput == "":
+            return
+        
+        try:
+            data = {"type": "Modify label", "username": self.username, "newLabel": dialogInput, "oldLabel": label.cget("text")}
+            jsonData = json.dumps(data)
+            self.socket.sendall(jsonData.encode())
+            msg = self.socket.recv(2048).decode()
+            if msg == "Label updated":
+                self.errorLabel.configure(text="")
+                label.configure(text=dialogInput)
+                self.successLabel.configure(text="Updated successfully")
+            else:
+                self.errorLabel.configure(text=msg)
+        except Exception as e:
+            print(e)
+
     # send a request to decrypt given password
     def decryptPassword(self, passwordEntry):
         try:
@@ -133,7 +162,7 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 
             jsonData = json.loads(msg)
 
-            if (jsonData["msg"] == "Password decrypted"):
+            if jsonData["msg"] == "Password decrypted":
                 passwordEntry.configure(state="normal")
                 passwordEntry.delete(0, len(passwordEntry.get()))
                 passwordEntry.insert(0, jsonData["password"])
@@ -143,7 +172,6 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 
         except Exception as e:
             print(e)
-            self.socket.close()
 
     # copy password to clipboard
     def copyPassword(self, passwordEntry):
@@ -213,6 +241,9 @@ class RegistrationScreen(tk.CTkFrame):
 
     # send a request to the server to add the user to the database
     def createUser(self):
+        if self.socket == None:
+            self.errorLabel.configure(text="Not connected to server")
+            return
         try:
             data = {"type": "Register", "username": self.userEntry.get(), "password": self.passwordEntry.get()}
             jsonData = json.dumps(data)
@@ -226,7 +257,6 @@ class RegistrationScreen(tk.CTkFrame):
                 self.successLabel.configure(text="")
         except Exception as e:
             print(e)
-            self.socket.close()
             self.successLabel.configure(text="")
             self.errorLabel.configure(text="Error connecting to server")
 
@@ -284,6 +314,9 @@ class PasswordManagementScreen(tk.CTkFrame):
 
     # send a request to retrieve the users passwords so they can be viewed
     def viewPasswords(self):
+        if self.socket == None:
+            self.errorLabel.configure(text="Not connected to server")
+            return
         try:
             data = {"type": "Get passwords", "username": self.username}
             jsonData = json.dumps(data)
@@ -300,7 +333,6 @@ class PasswordManagementScreen(tk.CTkFrame):
             
         except Exception as e:
             print(e)
-            self.socket.close()
             self.errorLabel.configure(text="Error connecting to server")
 
     # set the username
@@ -334,6 +366,9 @@ class PasswordManagementScreen(tk.CTkFrame):
 
     # send a request to the server to save the password
     def savePassword(self):
+        if self.socket == None:
+            self.errorLabel.configure(text="Not connected to server")
+            return
         try:
             data = {
                 "type": "Save password", 
@@ -352,7 +387,6 @@ class PasswordManagementScreen(tk.CTkFrame):
                 self.errorLabel.configure(text=msg)
         except Exception as e:
             print(e)
-            self.socket.close()
             self.successLabel.configure(text="")
             self.errorLabel.configure(text="Error connecting to server")
 
@@ -404,6 +438,9 @@ class LoginScreen(tk.CTkFrame):
         
     # send a request to the server to login the user
     def loginSuccess(self):
+        if self.socket == None:
+            self.errorLabel.configure(text="Not connected to server")
+            return
         try:
             data = {"type": "Login", "username": self.userEntry.get(), "password": self.passwordEntry.get()}
             jsonData = json.dumps(data)
@@ -418,17 +455,21 @@ class LoginScreen(tk.CTkFrame):
                 self.errorLabel.configure(text=msg)
         except Exception as e:
             print(e)
-            self.socket.close()
             self.errorLabel.configure(text="Error connecting to server")
 
 
 # start the client instance
 if __name__== "__main__":
-    s = socket.socket()
-    s.connect(('127.0.0.1', 33333))
+    sslSock = None
+    try:
+        s = socket.socket()
+        s.settimeout(15)
+        # bind to ip and port
+        s.connect(("127.0.0.1", 33333))
 
-    sslContext = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile='trust_store/server_cert.pem')
-    sslSock = sslContext.wrap_socket(s, server_hostname='PWManage')
-
+        sslContext = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile="trust_store/server_cert.pem")
+        sslSock = sslContext.wrap_socket(s, server_hostname="PWManage")
+    except Exception as e:
+        print(e)
     app = Root(sslSock)
     app.mainloop()

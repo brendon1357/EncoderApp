@@ -178,6 +178,39 @@ class HandleClient(threading.Thread):
 			self.sock.sendall(b'Server error')
 			print("Error: {}".format(e))
 
+	# update password label in database
+	def updateLabel(self, username, newLabel, oldLabel):
+		connection = getDB()
+		if connection is None:
+			print("Could not connect to database")
+			return None
+		try:
+			userID = self.getUserID(username)
+			if userID is None:
+				print("Could not retrieve user id")
+				return
+
+			cursor = connection.cursor()
+			updateLabelQuery = """
+			    UPDATE passwordstable AS pt1
+    			LEFT JOIN passwordstable AS pt2 ON pt1.userID = pt2.userID AND pt2.label = %s
+				SET pt1.label = %s
+				WHERE pt1.userID = %s AND pt1.label = %s AND pt2.label IS NULL
+			"""
+			cursor.execute(updateLabelQuery, (newLabel, newLabel, userID, oldLabel))
+			connection.commit()
+
+			if (cursor.rowcount > 0):
+				print("Client " + self.address[0] + " [" + username + "]" + " updated label successfully")
+				self.sock.sendall(b'Label updated')
+			else:
+				print("Client " + self.address[0] + " [" + username + "]" + " failed to update label")
+				self.sock.sendall(b'Update failed, enter unique label')
+
+		except Exception as e:
+			self.sock.sendall(b'Server error')
+			print("Error: {}".format(e))
+
 	# decrypt the given password for the given user and send it over socket
 	def decryptPassword(self, username, password):
 		connection = getDB()
@@ -264,7 +297,7 @@ class HandleClient(threading.Thread):
 					username = jsonData["username"]
 					password = jsonData["password"]
 					label = jsonData["label"]
-					if (password == "" or label == ""):
+					if password == "" or label == "":
 						print("Client " + self.address[0] + " attempting to save an empty password or empty label: " + username)
 						self.sock.sendall(b'Empty input(s) enter a label and generate a password')
 					else:
@@ -280,11 +313,22 @@ class HandleClient(threading.Thread):
 					username = jsonData["username"]
 					password = jsonData["password"]
 					print("Client " + self.address[0] + " attempting to decrypt a password: " + username)
-					if (len(password) <= 24):
+					if len(password) <= 24:
 						print("Client " + self.address[0] + " password was already decrypted: " + username)
 						self.sock.sendall(b'Already decrypted')
 					else:
 						self.decryptPassword(username, password)
+
+				elif jsonData["type"] == "Modify label":
+					username = jsonData["username"]
+					newLabel = jsonData["newLabel"]
+					oldLabel = jsonData["oldLabel"]
+					print("Client " + self.address[0] + " [" + username + "]" + " attempted to update label")
+					if newLabel == "":
+						print("Client " + self.address[0] + " [" + username + "]" + " attempted to update label with empty string")
+						self.sock.sendall(b'Cant update empty label')
+					else:
+						self.updateLabel(username, newLabel, oldLabel)
 
 
 # the server class
