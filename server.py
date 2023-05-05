@@ -34,7 +34,7 @@ class HandleClient(threading.Thread):
 			connection.commit()
 			
 			# respond with a msg that the client has registered successfully
-			print("Client " + self.address[0] + " successfully registered")
+			print("Client " + self.address[0] + " [" + username + "]" + " successfully registered")
 			self.sock.sendall(b'Successfully registered')
 	
 		except Exception as e:
@@ -81,7 +81,7 @@ class HandleClient(threading.Thread):
 				hashedInputPassword = bcrypt.hashpw(password.encode(), salt.encode())
 
 				if hashedPassword == hashedInputPassword.decode():
-					print("Client " + self.address[0] + " successfully logged in")
+					print("Client " + self.address[0] + " [" + username + "]" + " successfully logged in")
 					self.sock.sendall(b'Login successful')
 				else:
 					print("Client " + self.address[0] + " failed to login")
@@ -127,14 +127,14 @@ class HandleClient(threading.Thread):
 			cursor.execute(checkExistingQuery, (userID, encryptedPassword, label))
 
 			if cursor.fetchall():
-				 print("Client " + self.address[0] + " password or label already exists for: " + username)
+				 print("Client " + self.address[0] + " [" + username + "]" + " password or label already exists")
 				 self.sock.sendall(b'Password or label already exists. Generate a unique password and enter a unique label')
 			else:
 				insertEncryptedPasswordQuery = "INSERT INTO passwordstable (userID, encryptedPassword, label) VALUES (%s, %s, %s)"
 				cursor.execute(insertEncryptedPasswordQuery, (userID, encryptedPassword, label))
 				connection.commit()
 
-				print("Client " + self.address[0] + " password save successfully for: " + username)
+				print("Client " + self.address[0] + " [" + username + "]" + " password saved successfully")
 				self.sock.sendall(b'Password saved')
 
 		except Exception as e:
@@ -172,7 +172,7 @@ class HandleClient(threading.Thread):
 			jsonData = json.dumps(passwordData)
 			self.sock.sendall(jsonData.encode())
 
-			print("Client " + self.address[0] + " passwords were sent successfully: " + username)
+			print("Client " + self.address[0] + " [" + username + "]" + " passwords were sent successfully")
 
 		except Exception as e:
 			self.sock.sendall(b'Server error')
@@ -235,7 +235,7 @@ class HandleClient(threading.Thread):
 			jsonData = json.dumps(passwordData)
 			self.sock.sendall(jsonData.encode())
 
-			print("Client " + self.address[0] + " decrypted a password successfully: " + username)
+			print("Client " + self.address[0] + " [" + username + "]" + " decrypted password successfully")
 
 		except Exception as e:
 			self.sock.sendall(b'Server error')
@@ -290,7 +290,7 @@ class HandleClient(threading.Thread):
 						print("Client " + self.address[0] + " failed to login empty input(s)")
 						self.sock.sendall(b'Username or password empty')
 					else:
-						print("Client " + self.address[0] + " attempting to login with username: " + username)
+						print("Client " + self.address[0] + " attempted to login with username: " + username)
 						self.loginSuccess(username, password)
 
 				elif jsonData["type"] == "Save password":
@@ -298,23 +298,23 @@ class HandleClient(threading.Thread):
 					password = jsonData["password"]
 					label = jsonData["label"]
 					if password == "" or label == "":
-						print("Client " + self.address[0] + " attempting to save an empty password or empty label: " + username)
+						print("Client " + self.address[0] + " [" + username + "]" + " attempted to save an empty password or label")
 						self.sock.sendall(b'Empty input(s) enter a label and generate a password')
 					else:
-						print("Client " + self.address[0] + " attempting to save a password with username: " + username)
+						print("Client " + self.address[0] + " [" + username + "]" + " attempted to save a password")
 						self.savePassword(username, password, label)
 
 				elif jsonData["type"] == "Get passwords":
 					username = jsonData["username"]
-					print("Client " + self.address[0] + " attempting to retrieve passwords: " + username)
+					print("Client " + self.address[0] + " [" + username + "]" + " attempted to retrieve passwords")
 					self.sendPasswords(username)
 
 				elif jsonData["type"] == "Decrypt password":
 					username = jsonData["username"]
 					password = jsonData["password"]
-					print("Client " + self.address[0] + " attempting to decrypt a password: " + username)
+					print("Client " + self.address[0] + " [" + username + "]" + " attempted to decrypt a password")
 					if len(password) <= 24:
-						print("Client " + self.address[0] + " password was already decrypted: " + username)
+						print("Client " + self.address[0] + " [" + username + "]" + " password was already decrypted")
 						self.sock.sendall(b'Already decrypted')
 					else:
 						self.decryptPassword(username, password)

@@ -1,4 +1,3 @@
-import sqlite3
 import os
 import mysql.connector
 from dotenv import load_dotenv, set_key

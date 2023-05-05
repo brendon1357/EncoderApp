@@ -10,3 +10,5 @@
 - Fernet library is used for encryption/decryption and BCrypt is used to salt and hash account passwords
 
 - CustomTKinter was used to develop the GUI
+
+Video demonstration: https://youtu.be/QK76yH1T2nk

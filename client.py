@@ -79,7 +79,7 @@ class Root(tk.CTk):
         height = self.winfo_reqheight()
         x = (self.winfo_screenwidth() // 2) - (width // 2)
         y = (self.winfo_screenheight() // 2) - (height // 2)
-        self.geometry('+{}+{}'.format( x, y))
+        self.geometry('+{}+{}'.format(x, y))
 
 
 # the frame to view all of the users saved passwords
@@ -130,6 +130,12 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
     # send a request to modify/update a label for a saved password
     def modifyLabel(self, label, event):
         dialog = tk.CTkInputDialog(text="Enter a new label name below", title="Modify Label")
+        # place at center of screen
+        width = dialog.winfo_reqwidth()
+        height = dialog.winfo_reqheight()
+        x = (dialog.winfo_screenwidth() // 2) - (width // 2)
+        y = (dialog.winfo_screenheight() // 2) - (height // 2)
+        dialog.geometry('+{}+{}'.format( x, y))
 
         dialogInput = dialog.get_input()
         # if the user clicks cancel or dialog input is somehow empty then don't send any requests
@@ -161,7 +167,6 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
                 return
 
             jsonData = json.loads(msg)
-
             if jsonData["msg"] == "Password decrypted":
                 passwordEntry.configure(state="normal")
                 passwordEntry.delete(0, len(passwordEntry.get()))
@@ -465,7 +470,7 @@ if __name__== "__main__":
         s = socket.socket()
         s.settimeout(15)
         # bind to ip and port
-        s.connect(("127.0.0.1", 33333))
+        s.connect(('127.0.0.1', 33333))
 
         sslContext = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile="trust_store/server_cert.pem")
         sslSock = sslContext.wrap_socket(s, server_hostname="PWManage")
