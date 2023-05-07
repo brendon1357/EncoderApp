@@ -192,8 +192,8 @@ class HandleClient(threading.Thread):
 
 			cursor = connection.cursor()
 			updateLabelQuery = """
-			    UPDATE passwordstable AS pt1
-    			LEFT JOIN passwordstable AS pt2 ON pt1.userID = pt2.userID AND pt2.label = %s
+				UPDATE passwordstable AS pt1
+				LEFT JOIN passwordstable AS pt2 ON pt1.userID = pt2.userID AND pt2.label = %s
 				SET pt1.label = %s
 				WHERE pt1.userID = %s AND pt1.label = %s AND pt2.label IS NULL
 			"""
@@ -256,6 +256,58 @@ class HandleClient(threading.Thread):
 		except Exception as e:
 			print("Error: {}".format(e))
 			return None
+
+	# delete the given password for the given user
+	def deletePassword(self, username, password):
+		connection = getDB()
+		if connection is None:
+			print("Could not connect to database")
+			return
+		try:
+			userID = self.getUserID(username)
+			if userID is None:
+				print("Could not retrieve user id")
+				return
+			cursor = connection.cursor()
+
+			passwordToDelete = password
+			# the user is trying to delete password after they decrypted it
+			if len(password) <= 32:
+				selectKeyQuery = "SELECT encryptionkey FROM encryptionkeys WHERE userID = %s"
+				cursor.execute(selectKeyQuery, (userID,))
+				encryptionKey = cursor.fetchone()[0]
+				# encrypt it so we can find it in the database
+				f = Fernet(encryptionKey)
+				encryptedPassword = f.encrypt(password.encode())
+				passwordToDelete = encryptedPassword
+
+			deletePasswordQuery = "DELETE FROM passwordstable WHERE userID = %s AND encryptedPassword = %s"
+			cursor.execute(deletePasswordQuery, (userID, passwordToDelete))
+			connection.commit()
+
+			if cursor.rowcount > 0:
+				print("Client " + self.address[0] + " [" + username + "]" + " deleted password successfully")
+				cursor = connection.cursor()
+				selectPasswordsQuery = "SELECT encryptedPassword, label FROM passwordstable WHERE userID = %s"
+				cursor.execute(selectPasswordsQuery, (userID,))
+				passwords = cursor.fetchall()
+				passwordData = []
+				for encryptedPassword, label in passwords:
+					passwordData.append({"encryptedPassword": encryptedPassword, "label": label})
+				
+				data = {"msg": "Password deleted successfully", "passwords": passwordData}
+				jsonData = json.dumps(data)
+				self.sock.sendall(jsonData.encode())
+			else:
+				print("Client " + self.address[0] + " [" + username + "]" + " failed to delete password")
+				data = {"msg": "Password failed to delete"}
+				jsonData = json.dumps(data)
+				self.sock.sendall(jsonData.encode())
+
+		except Exception as e:
+			print("Error: {}".format(e))
+			return None
+
 
 	# keep listening for messages from the client and handle requests
 	def run(self):
@@ -329,6 +381,12 @@ class HandleClient(threading.Thread):
 						self.sock.sendall(b'Cant update empty label')
 					else:
 						self.updateLabel(username, newLabel, oldLabel)
+
+				elif jsonData["type"] == "Delete password":
+					print("Client " + self.address[0] + " [" + username + "]" + " attempted to delete a password")
+					username = jsonData["username"]
+					password = jsonData["password"]
+					self.deletePassword(username, password)
 
 
 # the server class
