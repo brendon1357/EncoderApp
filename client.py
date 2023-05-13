@@ -218,6 +218,7 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 		inputWindow = InputWindow()
 		inputWindow.transient(self)
 		inputWindow.grab_set()
+		inputWindow.update_idletasks()
 		# place at center of screen
 		inputWindowWidth = inputWindow.winfo_width()
 		inputWindowHeight = inputWindow.winfo_height()
@@ -258,6 +259,7 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 		confirmationWindow = ConfirmationWindow()
 		confirmationWindow.transient(self)
 		confirmationWindow.grab_set()
+		confirmationWindow.update_idletasks()
 		confirmationWindowWidth = confirmationWindow.winfo_width()
 		confirmationWindowHeight = confirmationWindow.winfo_height()
 		rootCenterX = self.controller.winfo_x() + self.controller.winfo_width() // 2
