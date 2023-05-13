@@ -10,6 +10,7 @@ import time
 from cryptography.fernet import Fernet
 from staticlibrary import isJson
 from db import getDB
+from logger import Logger
 
 
 # Class to handle clients in a new thread for each client
@@ -20,6 +21,9 @@ class HandleClient(threading.Thread):
 		self.address = address
 		self.lastRequestTime = {}
 		self.lastTimeoutTime = 0
+
+		loggerObject = Logger("logfile.log")
+		self.logger = loggerObject.getLogger()
  
 	# check the last request sent and prevent multiple requests too frequently
 	def checkRateLimit(self, requestType):
@@ -43,6 +47,7 @@ class HandleClient(threading.Thread):
 		connection = getDB()
 		if connection is None:
 			print("Could not connect to database")
+			self.logger.critical("Could not connect to database")
 			return
 		try:
 			cursor = connection.cursor()
@@ -57,30 +62,37 @@ class HandleClient(threading.Thread):
 			
 			# respond with a msg that the client has registered successfully
 			print("Client " + self.address[0] + " [" + username + "]" + " successfully registered")
+			self.logger.info("Client " + self.address[0] + " [" + username + "]" + " successfully registered")
 			self.sock.sendall(b'Successfully registered')
 		except Exception as e:
 			self.sock.sendall(b'Server error')
 			print("Error: {}".format(e))
+			self.logger.error(e)
 
 	# adds the user to the database if the user doesn't already exist
 	def createUser(self, username, password):
 		if username == "" or password == "":
 			print("Client " + self.address[0] + " failed to register empty input(s)")
+			self.logger.warning("Client " + self.address[0] + " failed to register empty input(s)")
 			self.sock.sendall(b'Username or password empty')
 			return
 		elif len(username) < 6 or len(username) > 40:
 			print("Client " + self.address[0] + " failed to register username invalid")
+			self.logger.warning("Client " + self.address[0] + " failed to register username invalid")
 			self.sock.sendall(b'Username must be greater than 5 characters and less than 40 characters')
 			return
 		elif not self.validPassword(password):
 			print("Client " + self.address[0] + " failed to register invalid password")
-			self.sock.sendall(b'Password must be at least 8 characters and contain a symbol: @, !, #, $, %, &, -')
+			self.logger.warning("Client " + self.address[0] + " failed to register invalid password")
+			self.sock.sendall(b'Password must be at least 8 characters and contain a symbol')
 			return
 
 		print("Client " + self.address[0] + " attempting to create account with username: " + username)
+		self.logger.info("Client " + self.address[0] + " attempting to create account with username: " + username)
 		connection = getDB()
 		if connection is None:
 			print("Could not connect to database")
+			self.logger.critical("Could not connect to database")
 			return
 		try:
 			cursor = connection.cursor()
@@ -89,25 +101,30 @@ class HandleClient(threading.Thread):
 			result = cursor.fetchone()
 
 			if result[0] > 0:
-				print("Client " + self.address[0] + " failed to register")
+				print("Client " + self.address[0] + " failed to register username already exists")
+				self.logger.warning("Client " + self.address[0] + " failed to register username already exists")
 				self.sock.sendall(b'Username already exists')
 			else:
 				self.insertUser(username, password)
 		except Exception as e:
 			self.sock.sendall(b'Server error')
 			print("Error: {}".format(e))
+			self.logger.error(e)
 
 	# check for user in database
 	def authenticateUser(self, username, password):
 		if username == "" or password == "":
 			print("Client " + self.address[0] + " failed to login empty input(s)")
+			self.logger.warning("Client " + self.address[0] + " failed to login empty input(s)")
 			self.sock.sendall(b'Username or password empty')
 			return
 
 		print("Client " + self.address[0] + " attempted to login with username: " + username)
+		self.logger.info("Client " + self.address[0] + " attempted to login with username: " + username)
 		connection = getDB()
 		if connection is None:
 			print("Could not connect to database")
+			self.logger.critical("Could not connect to database")
 			return
 		try:
 			cursor = connection.cursor()
@@ -120,41 +137,51 @@ class HandleClient(threading.Thread):
 				hashedInputPassword = bcrypt.hashpw(password.encode(), salt.encode())
 				if hashedPassword == hashedInputPassword.decode():
 					print("Client " + self.address[0] + " [" + username + "]" + " successfully logged in")
+					self.logger.info("Client " + self.address[0] + " [" + username + "]" + " successfully logged in")
 					self.sock.sendall(b'Login successful')
 				else:
-					print("Client " + self.address[0] + " failed to login")
+					print("Client " + self.address[0] + " failed to login username or password does not exist")
+					self.logger.warning("Client " + self.address[0] + " failed to login username or password does not exist")
 					self.sock.sendall(b'Username or password does not exist')
 			else:
-				print("Client " + self.address[0] + " failed to login")
+				print("Client " + self.address[0] + " failed to login username or password does not exist")
+				self.logger.warning("Client " + self.address[0] + " failed to login username or password does not exist")
 				self.sock.sendall(b'Username or password does not exist')
 		except Exception as e:
 			self.sock.sendall(b'Server error')
 			print("Error: {}".format(e))
+			self.logger.error(e)
 
 	# save the given password and password label in the database for the given user
 	def savePassword(self, username, password, label):
 		if password == "" or label == "":
 			print("Client " + self.address[0] + " [" + username + "]" + " attempted to save an empty password or label")
+			self.logger.warning("Client " + self.address[0] + " [" + username + "]" + " attempted to save an empty password or label")
 			self.sock.sendall(b'Empty input(s) enter a label and generate a password')
 			return
 		elif len(password) > 32 or len(password) < 8:
 			print("Client " + self.address[0] + " [" + username + "]" + " attempted to save an invalid password (invalid length)")
+			self.logger.warning("Client " + self.address[0] + " [" + username + "]" + " attempted to save an invalid password (invalid length)")
 			self.sock.sendall(b'Password must be between 8 and 32 characters inclusive')
 			return
 		elif len(label) >=50:
 			print("Client " + self.address[0] + " [" + username + "]" + " attempted to save a password with a label over 50 characters")
+			self.logger.warning("Client " + self.address[0] + " [" + username + "]" + " attempted to save a password with a label over 50 characters")
 			self.sock.sendall(b'Label must be 50 characters or less')
 			return
 
 		print("Client " + self.address[0] + " [" + username + "]" + " attempted to save a password")
+		self.logger.info("Client " + self.address[0] + " [" + username + "]" + " attempted to save a password")
 		connection = getDB()
 		if connection is None:
 			print("Could not connect to database")
+			self.logger.critical("Could not connect to database")
 			return
 		try:
 			userID = self.getUserID(username)
 			if userID is None:
 				print("Could not retrieve user id")
+				self.logger.critical("Could not retrieve user id")
 				return
 
 			cursor = connection.cursor()
@@ -179,6 +206,7 @@ class HandleClient(threading.Thread):
 
 			if cursor.fetchall():
 				 print("Client " + self.address[0] + " [" + username + "]" + " password or label already exists")
+				 self.logger.warning("Client " + self.address[0] + " [" + username + "]" + " password or label already exists")
 				 self.sock.sendall(b'Password or label already exists. Generate a unique password and enter a unique label')
 			else:
 				insertEncryptedPasswordQuery = "INSERT INTO passwordstable (userID, encryptedPassword, label) VALUES (%s, %s, %s)"
@@ -186,29 +214,34 @@ class HandleClient(threading.Thread):
 				connection.commit()
 
 				print("Client " + self.address[0] + " [" + username + "]" + " password saved successfully")
+				self.logger.info("Client " + self.address[0] + " [" + username + "]" + " password saved successfully")
 				self.sock.sendall(b'Password saved')
 		except Exception as e:
 			self.sock.sendall(b'Server error')
 			print("Error: {}".format(e))
+			self.logger.error(e)
 
 	# return true if given string is a valid password otherwise return false
 	def validPassword(self, str):
 		if len(str) < 8:
 			return False
-		symbols = r'[@!#$%&-]'
+		symbols = r'[#%!^&()<>?_=+@~-]'
 		return bool(re.search(symbols, str))
 
 	# send the users passwords over socket to them
 	def sendPasswords(self, username):
 		print("Client " + self.address[0] + " [" + username + "]" + " attempted to retrieve passwords")
+		self.logger.info("Client " + self.address[0] + " [" + username + "]" + " attempted to retrieve passwords")
 		connection = getDB()
 		if connection is None:
 			print("Could not connect to database")
+			self.logger.critical("Could not connect to database")
 			return
 		try:
 			userID = self.getUserID(username)
 			if userID is None:
 				print("Could not retrieve user id")
+				self.logger.critical("Could not retrieve user id")
 				return
 
 			cursor = connection.cursor()
@@ -224,30 +257,37 @@ class HandleClient(threading.Thread):
 			self.sock.sendall(jsonData.encode())
 
 			print("Client " + self.address[0] + " [" + username + "]" + " passwords were sent successfully")
+			self.logger.info("Client " + self.address[0] + " [" + username + "]" + " passwords were sent successfully")
 		except Exception as e:
 			self.sock.sendall(b'Server error')
 			print("Error: {}".format(e))
+			self.logger.error(e)
 
 	# update password label in database
 	def updateLabel(self, username, newLabel, oldLabel):
 		if newLabel == "":
 			print("Client " + self.address[0] + " [" + username + "]" + " attempted to update label with empty string")
+			self.logger.warning("Client " + self.address[0] + " [" + username + "]" + " attempted to update label with empty string")
 			self.sock.sendall(b'Cant update empty label')
 			return
 		elif len(newLabel) > 50:
 			print("Client " + self.address[0] + " [" + username + "]" + " attempted to modify label to over 50 characters")
+			self.logger.warning("Client " + self.address[0] + " [" + username + "]" + " attempted to modify label to over 50 characters")
 			self.sock.sendall(b'Label must be 50 characters or less')
 			return
 
 		print("Client " + self.address[0] + " [" + username + "]" + " attempted to update label")
+		self.logger.info("Client " + self.address[0] + " [" + username + "]" + " attempted to update label")
 		connection = getDB()
 		if connection is None:
 			print("Could not connect to database")
+			self.logger.critical("Could not connect to database")
 			return None
 		try:
 			userID = self.getUserID(username)
 			if userID is None:
 				print("Could not retrieve user id")
+				self.logger.critical("Could not retrieve user id")
 				return
 
 			cursor = connection.cursor()
@@ -262,30 +302,37 @@ class HandleClient(threading.Thread):
 
 			if cursor.rowcount > 0:
 				print("Client " + self.address[0] + " [" + username + "]" + " updated label successfully")
+				self.logger.info("Client " + self.address[0] + " [" + username + "]" + " updated label successfully")
 				self.sock.sendall(b'Label updated')
 			else:
-				print("Client " + self.address[0] + " [" + username + "]" + " failed to update label")
+				print("Client " + self.address[0] + " [" + username + "]" + " failed to update label not unique")
+				self.logger.warning("Client " + self.address[0] + " [" + username + "]" + " failed to update label not unique")
 				self.sock.sendall(b'Update failed, enter unique label')
 		except Exception as e:
 			self.sock.sendall(b'Server error')
 			print("Error: {}".format(e))
+			self.logger.error(e)
 
 	# decrypt the given password for the given user and send it over socket
 	def decryptPassword(self, username, password):
 		if len(password) <= 32:
 			print("Client " + self.address[0] + " [" + username + "]" + " password was already decrypted")
+			self.logger.warning("Client " + self.address[0] + " [" + username + "]" + " password was already decrypted")
 			self.sock.sendall(b'Already decrypted')
 			return
 		
 		print("Client " + self.address[0] + " [" + username + "]" + " attempted to decrypt a password")
+		self.logger.info("Client " + self.address[0] + " [" + username + "]" + " attempted to decrypt a password")
 		connection = getDB()
 		if connection is None:
 			print("Could not connect to database")
+			self.logger.critical("Could not connect to database")
 			return
 		try:
 			userID = self.getUserID(username)
 			if userID is None:
 				print("Could not retrieve user id")
+				self.logger.critical("Could not retrieve user id")
 				return
 
 			cursor = connection.cursor()
@@ -301,15 +348,18 @@ class HandleClient(threading.Thread):
 			self.sock.sendall(jsonData.encode())
 
 			print("Client " + self.address[0] + " [" + username + "]" + " decrypted password successfully")
+			self.logger.info("Client " + self.address[0] + " [" + username + "]" + " decrypted password successfully")
 		except Exception as e:
 			self.sock.sendall(b'Server error')
 			print("Error: {}".format(e))
+			self.logger.error(e)
 
 	# get user id for given username
 	def getUserID(self, username):
 		connection = getDB()
 		if connection is None:
 			print("Could not connect to database")
+			self.logger.critical("Could not connect to database")
 			return None
 		try:
 			cursor = connection.cursor()
@@ -318,19 +368,23 @@ class HandleClient(threading.Thread):
 			return cursor.fetchone()[0]
 		except Exception as e:
 			print("Error: {}".format(e))
+			self.logger.error(e)
 			return None
 
 	# delete the given password for the given user
 	def deletePassword(self, username, password):
 		print("Client " + self.address[0] + " [" + username + "]" + " attempted to delete a password")
+		self.logger.info("Client " + self.address[0] + " [" + username + "]" + " attempted to delete a password")
 		connection = getDB()
 		if connection is None:
 			print("Could not connect to database")
+			self.logger.critical("Could not connect to database")
 			return
 		try:
 			userID = self.getUserID(username)
 			if userID is None:
 				print("Could not retrieve user id")
+				self.logger.critical("Could not retrieve user id")
 				return
 			cursor = connection.cursor()
 
@@ -341,6 +395,7 @@ class HandleClient(threading.Thread):
 
 			if cursor.rowcount > 0:
 				print("Client " + self.address[0] + " [" + username + "]" + " deleted password successfully")
+				self.logger.info("Client " + self.address[0] + " [" + username + "]" + " deleted password successfully")
 				cursor = connection.cursor()
 				selectPasswordsQuery = "SELECT encryptedPassword, label FROM passwordstable WHERE userID = %s"
 				cursor.execute(selectPasswordsQuery, (userID,))
@@ -353,11 +408,13 @@ class HandleClient(threading.Thread):
 				self.sock.sendall(jsonData.encode())
 			else:
 				print("Client " + self.address[0] + " [" + username + "]" + " failed to delete password")
+				self.logger.warning("Client " + self.address[0] + " [" + username + "]" + " failed to delete password")
 				data = {"msg": "Password failed to delete"}
 				jsonData = json.dumps(data)
 				self.sock.sendall(jsonData.encode())
 		except Exception as e:
 			print("Error: {}".format(e))
+			self.logger.error(e)
 			return None
 
 	# keep listening for messages from the client and handle requests
@@ -366,6 +423,7 @@ class HandleClient(threading.Thread):
 			msg = self.sock.recv(2048).decode()
 			if not msg:
 				print("Client disconnected from IP: " + self.address[0])
+				self.logger.info("Client disconnected from IP: " + self.address[0])
 				self.sock.close()
 				break 
 
@@ -373,6 +431,7 @@ class HandleClient(threading.Thread):
 				jsonData = json.loads(msg)
 				if not self.checkRateLimit(jsonData["type"]):
 					print("Client " + self.address[0] + " tried to perform the same operation too frequently")
+					self.logger.warning("Client " + self.address[0] + " tried to perform the same operation too frequently")
 					self.sock.sendall(b'Too many requests, please wait at least 3 seconds')
 					continue
 				
@@ -409,4 +468,5 @@ class HandleClient(threading.Thread):
 				self.lastRequestTime[jsonData["type"]] = time.time()
 			else:
 				print("Client " + self.address[0] + " [" + username + "]" + " sent an invalid request")
+				self.logger.warning("Client " + self.address[0] + " [" + username + "]" + " sent an invalid request")
 				self.sock.sendall(b'Server could not handle request')

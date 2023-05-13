@@ -378,7 +378,7 @@ class RegistrationScreen(tk.CTkFrame):
 		self.passwordEntry.place(relx=0.50, rely=0.57, anchor=tk.CENTER)
 
 		registerButton = tk.CTkButton(self, text="Register", font=("Arial", 20, "bold"), width=350, height=32, 
-			command=lambda: self.createUser())
+			command=lambda: threading.Thread(target=self.createUser).start())
 		registerButton.place(relx=0.50, rely=0.75, anchor=tk.CENTER)
 
 		loginLabel = tk.CTkLabel(self, text="Click here to login", font=("Arial", 16, "bold"), cursor="hand2", text_color="#4aa8ff")
@@ -513,7 +513,7 @@ class PasswordManagementScreen(tk.CTkFrame):
 	def passwordGenerator(self):
 		length = int(self.slider.get())
 		# get random password of given length with letters, digits, and different symbols
-		validSymbols = "@-!$#&"
+		validSymbols = "@-!$#&~_?%()^<>"
 		upperLetters = string.ascii_uppercase
 		digits = string.digits
 		characters = string.ascii_letters + digits + validSymbols
