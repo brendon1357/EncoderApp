@@ -4,25 +4,12 @@ import customtkinter as tk
 import socket
 import ssl
 import json
+import sys
+import threading
 from tkinter import messagebox
 from functools import partial
+from staticlibrary import isJson, sendAndReceiveMsg, getInstanceLock
 
-# helper function to send a msg over given socket with given data and return the response
-def sendAndReceiveMsg(socket, givenData):
-	if socket == None:
-		return "Not connected to server"
-	try:
-		data = givenData
-		jsonData = json.dumps(data)
-		socket.sendall(jsonData.encode())
-		msg = socket.recv(2048).decode()
-		return msg
-	except OSError as e:
-		print("Socket Error: {}".format(e))
-		return "A server error occurred"
-	except Exception as e:
-		print("Unexpected Error: {}".format(e))
-		return "An unexpected error occurred"
 
 # the root window of the application
 class Root(tk.CTk):
@@ -103,6 +90,69 @@ class Root(tk.CTk):
 		self.geometry('+{}+{}'.format(x, y))
 
 
+class ConfirmationWindow(tk.CTkToplevel):
+	def __init__(self):
+		tk.CTkToplevel.__init__(self)
+		self.geometry("375x150")
+		self.title("Confirm Delete")
+		self.resizable(False, False)
+
+		self.confirmed = False
+
+		askConfirmationLabel =  tk.CTkLabel(self, text="Are you sure you want to delete this password?", font=("Arial", 14, "bold"))
+		askConfirmationLabel.place(relx=0.50, rely=0.30, anchor=tk.CENTER)
+
+		yesButton = tk.CTkButton(self, text="Yes", font=("Arial", 14, "bold"), cursor="hand2", width=150, command=lambda: self.yesClicked())
+		yesButton.place(relx=0.04, rely=0.65, anchor=tk.W)
+
+		noButton = tk.CTkButton(self, text="No", font=("Arial", 14, "bold"), cursor="hand2", width=150, command=lambda: self.noClicked())
+		noButton.place(relx=0.96, rely=0.65, anchor=tk.E)
+
+	def yesClicked(self):
+		self.confirmed = True
+		self.destroy()
+
+	def noClicked(self):
+		self.destroy()
+
+	def isConfirmed(self):
+		return self.confirmed
+
+
+class InputWindow(tk.CTkToplevel):
+	def __init__(self):
+		tk.CTkToplevel.__init__(self)
+		self.geometry("375x150")
+		self.title("New Label")
+		self.resizable(False, False)
+
+		self.enteredLabel = ""
+
+		headerLabel =  tk.CTkLabel(self, text="Enter a new label below or cancel", font=("Arial", 14, "bold"))
+		headerLabel.place(relx=0.50, rely=0.20, anchor=tk.CENTER)
+
+		self.entry = tk.CTkEntry(self, placeholder_text="Enter new label here", width=350, font=("Arial", 14))
+		self.entry.place(relx=0.50, rely=0.45, anchor=tk.CENTER)
+
+		okButton = tk.CTkButton(self, text="Ok", font=("Arial", 14, "bold"), cursor="hand2", width=150, command=lambda: self.okClicked())
+		okButton.place(relx=0.03, rely=0.75, anchor=tk.W)
+
+		cancelButton = tk.CTkButton(self, text="Cancel", font=("Arial", 14, "bold"), cursor="hand2", width=150, command=lambda: self.cancelClicked())
+		cancelButton.place(relx=0.97, rely=0.75, anchor=tk.E)
+
+	def okClicked(self):
+		self.enteredLabel = self.entry.get()
+		self.destroy()
+
+	def cancelClicked(self):
+		self.destroy()
+
+	def getInput(self):
+		if len(self.enteredLabel) > 0:
+			return self.enteredLabel
+		return None
+
+
 # the frame to view all of the users saved passwords
 class ViewPasswordsScreen(tk.CTkScrollableFrame):
 	def __init__(self, parent, controller, height, width, socket):
@@ -113,14 +163,17 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 		self.passwords = []
 
 		self.successLabel = tk.CTkLabel(self, text="", font=("Arial", 14, "bold"), text_color="green")
-		self.successLabel.grid(row=0, column=0, sticky="e")
+		self.successLabel.grid(row=0, column=0, padx=(150, 0))
 
 		self.errorLabel = tk.CTkLabel(self, text="", font=("Arial", 14, "bold"), text_color="#ff4242")
-		self.errorLabel.grid(row=0, column=0, sticky="e")
+		self.errorLabel.grid(row=0, column=0, padx=(150, 0))
 
-		backButton = tk.CTkButton(self, text="Go Back", font=("Arial", 16, "bold"), height=32, 
+		self.loadingLabel = tk.CTkLabel(self, text="", font=("Arial", 14, "bold"), text_color="green")
+		self.loadingLabel.grid(row=0, column=0, padx=(150, 0))
+
+		backButton = tk.CTkButton(self, text="Back", font=("Arial", 16, "bold"), width=95, fg_color="#15a100", hover_color="#107d00", 
 			command=lambda: self.goBack())
-		backButton.grid(row=0, column=0, pady=(0, 20), sticky="w")
+		backButton.grid(row=0, column=0, pady=(5, 20), padx=(5, 0), sticky="w")
 
 	# display all of the users saved passwords
 	def displayPasswords(self, passwords):
@@ -143,7 +196,7 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 			listPassword.grid(row=i+1, column=0, pady=(0, 40))
 
 			decryptButton = tk.CTkButton(self, text="Decrypt", font=("Arial", 16, "bold"), height=32, 
-			command=partial(self.decryptPassword, listPassword))
+			command=partial(self.startDecryptThread, listPassword))
 			decryptButton.grid(row=i+1, column=1, pady=(0, 40), padx=20)
 
 			copyButton = tk.CTkButton(self, text="Copy", font=("Arial", 16, "bold"), height=32, 
@@ -153,74 +206,129 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 			listLabel.bind("<Button-1>", command=partial(self.modifyLabel, listLabel))
 			deleteLabel.bind("<Button-1>", command=partial(self.deletePassword, listPassword))
 
-	# send a request to modify/update a label for a saved password
+	# prompt the user to input a new label and start a new thread to send that new label in a request to the server
 	def modifyLabel(self, label, event):
-		dialog = tk.CTkInputDialog(text="Enter a new label name below", title="Modify Label")
+		inputWindow = InputWindow()
+		inputWindow.transient(self)
+		inputWindow.grab_set()
 		# place at center of screen
-		width = dialog.winfo_reqwidth()
-		height = dialog.winfo_reqheight()
-		x = (dialog.winfo_screenwidth() // 2) - (width // 2)
-		y = (dialog.winfo_screenheight() // 2) - (height // 2)
-		dialog.geometry('+{}+{}'.format( x, y))
+		inputWindowWidth = inputWindow.winfo_width()
+		inputWindowHeight = inputWindow.winfo_height()
+		rootCenterX = self.controller.winfo_x() + self.controller.winfo_width() // 2
+		rootCenterY = self.controller.winfo_y() + self.controller.winfo_height() // 2
+		inputWindow.geometry('+{}+{}'.format(rootCenterX - inputWindowWidth // 2, rootCenterY - inputWindowHeight // 2))
+		self.wait_window(inputWindow)
 
-		dialogInput = dialog.get_input()
+		enteredInput = inputWindow.getInput()
 		# if the user clicks cancel or dialog input is somehow empty then don't send any requests
-		if dialogInput == None or dialogInput == "":
+		if enteredInput is None:
 			return
+		threading.Thread(target=self.sendModifyRequestToServer, args=(label, enteredInput)).start()
 
-		data = {"type": "Modify label", "username": self.username, "newLabel": dialogInput, "oldLabel": label.cget("text")}
-		msg = sendAndReceiveMsg(self.socket, data)
+	# send a request to modify/update a label for a saved password
+	def sendModifyRequestToServer(self, label, enteredInput):
+		self.successLabel.configure(text="")
+		self.errorLabel.configure(text="")
+		self.loadingLabel.configure(text="Loading...")
+		data = {"type": "Modify label", "username": self.username, "newLabel": enteredInput, "oldLabel": label.cget("text")}
+		msg = sendAndReceiveMsg(self.socket, data, 1024)
 		if msg == "Label updated":
 			self.errorLabel.configure(text="")
-			label.configure(text=dialogInput)
+			self.loadingLabel.configure(text="")
 			self.successLabel.configure(text="Updated successfully")
+			label.configure(text=enteredInput)
 		else:
+			self.loadingLabel.configure(text="")
 			self.successLabel.configure(text="")
 			self.errorLabel.configure(text=msg)
 
-	# send a request to delete the requested saved password
+	# prompt the user to confirm deletion of password and send request in a new thread
 	def deletePassword(self, passwordEntry, event):
-		data = {"type": "Delete password", "username": self.username, "password": passwordEntry.get()}
-		msg = sendAndReceiveMsg(self.socket, data)
-
-		jsonData = json.loads(msg)
-		if jsonData["msg"] == "Password deleted successfully":
-			self.errorLabel.configure(text="")
-			self.successLabel.configure(text=jsonData["msg"])
-			for widget in self.winfo_children():
-				if isinstance(widget, tk.CTkLabel):
-					if widget.cget("text_color") == "green" or widget.cget("text_color") == "#ff4242":
-						continue
-				if isinstance(widget, tk.CTkButton):
-					if widget.cget("text") == "Go Back":
-						continue
-				widget.destroy()
-			self.displayPasswords(jsonData["passwords"])
-		else:
+		if len(passwordEntry.get()) <= 32:
 			self.successLabel.configure(text="")
-			self.errorLabel.configure(text=jsonData["msg"])
+			self.errorLabel.configure(text="Can only delete password before decryption")
+			return
+		confirmationWindow = ConfirmationWindow()
+		confirmationWindow.transient(self)
+		confirmationWindow.grab_set()
+		confirmationWindowWidth = confirmationWindow.winfo_width()
+		confirmationWindowHeight = confirmationWindow.winfo_height()
+		rootCenterX = self.controller.winfo_x() + self.controller.winfo_width() // 2
+		rootCenterY = self.controller.winfo_y() + self.controller.winfo_height() // 2
+		confirmationWindow.geometry('+{}+{}'.format(rootCenterX - confirmationWindowWidth // 2, rootCenterY - confirmationWindowHeight // 2))
+		self.wait_window(confirmationWindow)
+		if confirmationWindow.isConfirmed():
+			threading.Thread(target=self.sendDeleteRequestToServer, args=(passwordEntry,)).start()
+
+	# send a request to delete the requested saved password
+	def sendDeleteRequestToServer(self, passwordEntry):
+		self.successLabel.configure(text="")
+		self.errorLabel.configure(text="")
+		self.loadingLabel.configure(text="Loading...")
+		data = {"type": "Delete password", "username": self.username, "password": passwordEntry.get()}
+		msg = sendAndReceiveMsg(self.socket, data, 4096)
+		if isJson(msg):
+			jsonData = json.loads(msg)
+			if jsonData["msg"] == "Password deleted successfully":
+				self.errorLabel.configure(text="")
+				self.successLabel.configure(text="")
+				self.loadingLabel.configure(text="")
+				if len(jsonData["passwords"]) > 0:
+					self.successLabel.configure(text=jsonData["msg"])
+				for widget in self.winfo_children():
+					if isinstance(widget, tk.CTkLabel):
+						if widget.cget("text_color") == "green" or widget.cget("text_color") == "#ff4242":
+							continue
+					if isinstance(widget, tk.CTkButton):
+						if widget.cget("text") == "Back":
+							continue
+					widget.destroy()
+				self.displayPasswords(jsonData["passwords"])
+			else:
+				self.loadingLabel.configure(text="")
+				self.successLabel.configure(text="")
+				self.errorLabel.configure(text=jsonData["msg"])
+		else:
+			self.loadingLabel.configure(text="")
+			self.successLabel.configure(text="")
+			self.errorLabel.configure(text=msg)
 
 	# send a request to decrypt given password
 	def decryptPassword(self, passwordEntry):
 		data = {"type": "Decrypt password", "username": self.username, "password": passwordEntry.get()}
-		msg = sendAndReceiveMsg(self.socket, data)
+		msg = sendAndReceiveMsg(self.socket, data, 1024)
 		if msg == "Already decrypted":
 			return
+		elif msg == "Too many requests too quickly":
+			self.successLabel.configure(text="")
+			self.errorLabel.configure(text=msg)
+			return
 
-		jsonData = json.loads(msg)
-		if jsonData["msg"] == "Password decrypted":
-			passwordEntry.configure(state="normal")
-			passwordEntry.delete(0, len(passwordEntry.get()))
-			passwordEntry.insert(0, jsonData["password"])
-			passwordEntry.configure(state="readonly")
+		if isJson(msg):
+			jsonData = json.loads(msg)
+			if jsonData["msg"] == "Password decrypted":
+				passwordEntry.configure(state="normal")
+				passwordEntry.delete(0, len(passwordEntry.get()))
+				passwordEntry.insert(0, jsonData["password"])
+				passwordEntry.configure(state="readonly")
+				self.successLabel.configure(text="")
+				self.errorLabel.configure(text="")
+			else:
+				self.successLabel.configure(text="")
+				self.errorLabel.configure(text=msg)
 		else:
 			self.successLabel.configure(text="")
 			self.errorLabel.configure(text=msg)
+
+	# method to start decrypting password in a separate thread
+	def startDecryptThread(self, listPassword):
+		threading.Thread(target=self.decryptPassword, args=(listPassword,)).start()
 
 	# copy password to clipboard
 	def copyPassword(self, passwordEntry):
 		self.clipboard_clear()
 		self.clipboard_append(passwordEntry.get())
+		self.errorLabel.configure(text="")
 		self.successLabel.configure(text="Password copied to clipboard")
 
 	# set the username
@@ -233,6 +341,7 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 	# go back to the password management screen
 	def goBack(self):
 		self.successLabel.configure(text="")
+		self.errorLabel.configure(text="")
 		self.controller.hideFrame(ViewPasswordsScreen)
 		self.controller.showFrame(PasswordManagementScreen)
 
@@ -259,6 +368,9 @@ class RegistrationScreen(tk.CTkFrame):
 		self.successLabel = tk.CTkLabel(self, text="", font=("Arial", 14, "bold"), text_color="green")
 		self.successLabel.place(relx=0.50, rely=0.66, anchor=tk.CENTER)
 
+		self.loadingLabel = tk.CTkLabel(self, text="", font=("Arial", 14, "bold"), text_color="green")
+		self.loadingLabel.place(relx=0.50, rely=0.66, anchor=tk.CENTER)
+
 		self.userEntry = tk.CTkEntry(self, placeholder_text="Enter username here", width=350, font=("Arial", 14))
 		self.userEntry.place(relx=0.50, rely=0.40, anchor=tk.CENTER)
 
@@ -274,8 +386,8 @@ class RegistrationScreen(tk.CTkFrame):
 
 		loginLabel.bind("<Button-1>", lambda event: self.loginScreen())
 
-		self.userEntry.bind("<Return>", lambda event: self.createUser())
-		self.passwordEntry.bind("<Return>", lambda event: self.createUser())
+		self.userEntry.bind("<Return>", lambda event: threading.Thread(target=self.createUser).start())
+		self.passwordEntry.bind("<Return>", lambda event: threading.Thread(target=self.createUser).start())
 
 	# show the login screen
 	def loginScreen(self):
@@ -283,17 +395,23 @@ class RegistrationScreen(tk.CTkFrame):
 		self.controller.showFrame(LoginScreen)
 		self.errorLabel.configure(text="")
 		self.successLabel.configure(text="")
+		self.loadingLabel.configure(text="")
 		self.userEntry.delete(0, len(self.userEntry.get()))
 		self.passwordEntry.delete(0, len(self.passwordEntry.get()))
 
 	# send a request to the server to add the user to the database
 	def createUser(self):
+		self.errorLabel.configure(text="")
+		self.successLabel.configure(text="")
+		self.loadingLabel.configure(text="Loading...")
 		data = {"type": "Register", "username": self.userEntry.get(), "password": self.passwordEntry.get()}
-		msg = sendAndReceiveMsg(self.socket, data)
+		msg = sendAndReceiveMsg(self.socket, data, 1024)
 		if msg == "Successfully registered":
+			self.loadingLabel.configure(text="")
 			self.errorLabel.configure(text="")
 			self.successLabel.configure(text=msg)
 		else:
+			self.loadingLabel.configure(text="")
 			self.successLabel.configure(text="")
 			self.errorLabel.configure(text=msg)
 
@@ -308,6 +426,10 @@ class PasswordManagementScreen(tk.CTkFrame):
 		self.controller = controller
 		sliderValue = tk.IntVar()
 		sliderValue.set(8)
+
+		logoutButton = tk.CTkButton(self, text="Logout", font=("Arial", 16, "bold"), width=95, fg_color="#ff392b", hover_color="#960a00", cursor="hand2", 
+			command=lambda: self.logout())
+		logoutButton.place(relx=0.02, rely=0.05, anchor=tk.W)
 
 		headerLabel = tk.CTkLabel(self, text="Manage Your Passwords", font=("Arial", 30, "bold"))
 		headerLabel.place(relx=0.50, rely=0.10, anchor=tk.CENTER)
@@ -327,7 +449,10 @@ class PasswordManagementScreen(tk.CTkFrame):
 		self.successLabel = tk.CTkLabel(self, text="", font=("Arial", 14, "bold"), text_color="green")
 		self.successLabel.place(relx=0.50, rely=0.70, anchor=tk.CENTER)
 
-		self.slider = tk.CTkSlider(self, from_=8, to=24, number_of_steps=16, variable=sliderValue)
+		self.loadingLabel = tk.CTkLabel(self, text="", font=("Arial", 14, "bold"), text_color="green")
+		self.loadingLabel.place(relx=0.50, rely=0.70, anchor=tk.CENTER)
+
+		self.slider = tk.CTkSlider(self, from_=8, to=32, number_of_steps=24, variable=sliderValue)
 		self.slider.place(relx=0.45, rely=0.37, anchor=tk.CENTER)        
 
 		self.passwordField = tk.CTkEntry(self, placeholder_text="Generate or enter a password here", width=450, height=32, fg_color="#363636")
@@ -344,25 +469,41 @@ class PasswordManagementScreen(tk.CTkFrame):
 		self.generatedPasswordLabelEntry.place(relx=0.95, rely=0.58, anchor=tk.E)
 
 		savePasswordButton = tk.CTkButton(self, text="Save Password", font=("Arial", 16, "bold"), width=160, height=32, 
-			command=lambda: self.savePassword())
+			command=lambda: threading.Thread(target=self.savePassword).start())
 		savePasswordButton.place(relx=0.04, rely=0.58, anchor=tk.W)
 
 		viewButton = tk.CTkButton(self, text="Access Your Data", font=("Arial", 16, "bold"), width=180, height=32,
-			command=lambda: self.viewPasswords())
+			command=lambda: threading.Thread(target=self.viewPasswords).start())
 		viewButton.place(relx=0.50, rely=0.82, anchor=tk.CENTER)
 
 	# send a request to retrieve the users passwords so they can be viewed
 	def viewPasswords(self):
-		data = {"type": "Get passwords", "username": self.username}
-		msg = sendAndReceiveMsg(self.socket, data)
-		passwords = json.loads(msg)
-		self.passwords = passwords
-		# hide this frame and setup password view frame
-		self.controller.hideFrame(PasswordManagementScreen)
-		self.controller.setupPasswordDisplay(passwords)
-		self.controller.showFrame(ViewPasswordsScreen)
 		self.errorLabel.configure(text="")
 		self.successLabel.configure(text="")
+		self.loadingLabel.configure(text="Loading...")
+		data = {"type": "Get passwords", "username": self.username}
+		msg = sendAndReceiveMsg(self.socket, data, 4096)
+		if isJson(msg):
+			passwords = json.loads(msg)
+			self.passwords = passwords
+			# hide this frame and setup password view frame
+			self.controller.hideFrame(PasswordManagementScreen)
+			self.controller.setupPasswordDisplay(passwords)
+			self.controller.showFrame(ViewPasswordsScreen)
+			self.loadingLabel.configure(text="")
+			self.errorLabel.configure(text="")
+			self.successLabel.configure(text="")
+		else:
+			self.loadingLabel.configure(text="")
+			self.successLabel.configure(text="")
+			self.errorLabel.configure(text="Corrupted data in server")
+			
+	# send user back to login screen
+	def logout(self):
+		self.controller.hideFrame(PasswordManagementScreen)
+		self.controller.showFrame(LoginScreen)
+		self.controller.setUsernameForFrame(PasswordManagementScreen, "")
+		self.controller.setUsernameForFrame(ViewPasswordsScreen, "")
 
 	# set the username
 	def setUsername(self, username):
@@ -393,17 +534,22 @@ class PasswordManagementScreen(tk.CTkFrame):
 
 	# send a request to the server to save the password
 	def savePassword(self):
+		self.errorLabel.configure(text="")
+		self.successLabel.configure(text="")
+		self.loadingLabel.configure(text="Loading...")
 		data = {
 				"type": "Save password", 
 				"password": self.passwordField.get(), 
 				"username": self.username, 
 				"label": self.generatedPasswordLabelEntry.get()
 		}
-		msg = sendAndReceiveMsg(self.socket, data)
+		msg = sendAndReceiveMsg(self.socket, data, 1024)
 		if msg == "Password saved":
+			self.loadingLabel.configure(text="")
 			self.errorLabel.configure(text="")
 			self.successLabel.configure(text=msg)
 		else:
+			self.loadingLabel.configure(text="")
 			self.successLabel.configure(text="")
 			self.errorLabel.configure(text=msg)
 
@@ -427,6 +573,9 @@ class LoginScreen(tk.CTkFrame):
 		self.errorLabel = tk.CTkLabel(self, text="", font=("Arial", 14, "bold"), text_color="#ff4242")
 		self.errorLabel.place(relx=0.50, rely=0.66, anchor=tk.CENTER)
 
+		self.loadingLabel = tk.CTkLabel(self, text="", font=("Arial", 14, "bold"), text_color="green")
+		self.loadingLabel.place(relx=0.50, rely=0.66, anchor=tk.CENTER)
+
 		self.userEntry = tk.CTkEntry(self, placeholder_text="Enter username here", width=350, font=("Arial", 14))
 		self.userEntry.place(relx=0.50, rely=0.40, anchor=tk.CENTER)
 
@@ -434,7 +583,7 @@ class LoginScreen(tk.CTkFrame):
 		self.passwordEntry.place(relx=0.50, rely=0.57, anchor=tk.CENTER)
 
 		loginButton = tk.CTkButton(self, text="Login", font=("Arial", 20, "bold"), width=350, height=32, 
-			command=lambda: self.loginSuccess())
+			command=lambda: threading.Thread(target=self.loginSuccess).start())
 		loginButton.place(relx=0.50, rely=0.75, anchor=tk.CENTER)
  
 		self.registerLabel = tk.CTkLabel(self, text="Click here to register", font=("Arial", 16, "bold"), cursor="hand2", text_color="#4aa8ff")
@@ -442,8 +591,8 @@ class LoginScreen(tk.CTkFrame):
 
 		self.registerLabel.bind("<Button-1>", lambda event: self.registrationScreen())
 		
-		self.userEntry.bind("<Return>", lambda event: self.loginSuccess())
-		self.passwordEntry.bind("<Return>", lambda event: self.loginSuccess())
+		self.userEntry.bind("<Return>", lambda event: threading.Thread(target=self.loginSuccess).start())
+		self.passwordEntry.bind("<Return>", lambda event: threading.Thread(target=self.loginSuccess).start())
 
 	# show the registration screen
 	def registrationScreen(self):
@@ -455,29 +604,44 @@ class LoginScreen(tk.CTkFrame):
 		
 	# send a request to the server to login the user
 	def loginSuccess(self):
+		self.errorLabel.configure(text="")
+		self.loadingLabel.configure(text="Loading...")
 		data = {"type": "Login", "username": self.userEntry.get(), "password": self.passwordEntry.get()}
-		msg = sendAndReceiveMsg(self.socket, data)
-		if "Login successful" in msg:
+		msg = sendAndReceiveMsg(self.socket, data, 1024)
+		if msg == "Login successful":
+			self.errorLabel.configure(text="")
+			self.loadingLabel.configure(text="")
 			self.controller.setUsernameForFrame(PasswordManagementScreen, self.userEntry.get())
 			self.controller.setUsernameForFrame(ViewPasswordsScreen, self.userEntry.get())
-			self.controller.destroyFrame(LoginScreen)
+			self.controller.hideFrame(LoginScreen)
 			self.controller.createFrame(PasswordManagementScreen, 0, 0, (25, 25), 25)
+			self.userEntry.delete(0, len(self.userEntry.get()))
+			self.passwordEntry.delete(0, len(self.passwordEntry.get()))
 		else:
+			self.loadingLabel.configure(text="")
 			self.errorLabel.configure(text=msg)
 
 
 # start the client instance
 if __name__== "__main__":
-	sslSock = None
-	try:
-		s = socket.socket()
-		s.settimeout(15)
-		# bind to ip and port
-		s.connect(('127.0.0.1', 33333))
+	# acquire lock to check if we have a client instance already running
+	lock = getInstanceLock()
+	if lock is not None:
+		sslSock = None
+		try:
+			s = socket.socket()
+			s.settimeout(15)
+			# bind to ip and port
+			s.connect(('127.0.0.1', 33333))
 
-		sslContext = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile="trust_store/server_cert.pem")
-		sslSock = sslContext.wrap_socket(s, server_hostname="PWManage")
-	except Exception as e:
-		print(e)
-	app = Root(sslSock)
-	app.mainloop()
+			sslContext = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile="trust_store/server_cert.pem")
+			sslSock = sslContext.wrap_socket(s, server_hostname="PWManage")
+		except Exception as e:
+			print(e)
+		app = Root(sslSock)
+		app.mainloop()
+
+		# release lock when program ends
+		lock.release()
+	else:
+		sys.exit()
