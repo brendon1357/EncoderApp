@@ -6,6 +6,8 @@ import ssl
 import json
 import sys
 import threading
+import os
+import sys
 from tkinter import messagebox
 from functools import partial
 from staticlibrary import isJson, sendAndReceiveMsg, getInstanceLock
@@ -75,6 +77,10 @@ class Root(tk.CTk):
 	# set the username for the given frame
 	def setUsernameForFrame(self, name, username):
 		self.frames[name].setUsername(username)
+
+	# set the access token for frame
+	def setTokenForFrame(self, name, token):
+		self.frames[name].setToken(token)
 
 	# call the displayPasswords method for the ViewPasswordsScreen class
 	def setupPasswordDisplay(self, passwords):
@@ -157,6 +163,7 @@ class InputWindow(tk.CTkToplevel):
 class ViewPasswordsScreen(tk.CTkScrollableFrame):
 	def __init__(self, parent, controller, height, width, socket):
 		tk.CTkScrollableFrame.__init__(self, parent, height=height, width=width)
+		self.token = None
 		self.socket = socket
 		self.username = ""
 		self.controller = controller
@@ -230,7 +237,7 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 		self.successLabel.configure(text="")
 		self.errorLabel.configure(text="")
 		self.loadingLabel.configure(text="Loading...")
-		data = {"type": "Modify label", "username": self.username, "newLabel": enteredInput, "oldLabel": label.cget("text")}
+		data = {"type": "Modify label", "token": self.token, "username": self.username, "newLabel": enteredInput, "oldLabel": label.cget("text")}
 		msg = sendAndReceiveMsg(self.socket, data, 1024)
 		if msg == "Label updated":
 			self.errorLabel.configure(text="")
@@ -265,7 +272,7 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 		self.successLabel.configure(text="")
 		self.errorLabel.configure(text="")
 		self.loadingLabel.configure(text="Loading...")
-		data = {"type": "Delete password", "username": self.username, "password": passwordEntry.get()}
+		data = {"type": "Delete password", "token": self.token, "username": self.username, "password": passwordEntry.get()}
 		msg = sendAndReceiveMsg(self.socket, data, 4096)
 		if isJson(msg):
 			jsonData = json.loads(msg)
@@ -295,7 +302,7 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 
 	# send a request to decrypt given password
 	def decryptPassword(self, passwordEntry):
-		data = {"type": "Decrypt password", "username": self.username, "password": passwordEntry.get()}
+		data = {"type": "Decrypt password", "token": self.token, "username": self.username, "password": passwordEntry.get()}
 		msg = sendAndReceiveMsg(self.socket, data, 1024)
 		if msg == "Already decrypted":
 			return
@@ -335,6 +342,11 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 	def setUsername(self, username):
 		self.username = username
 
+	# set the token
+	def setToken(self, token):
+		self.token = token
+
+	# set the passwords
 	def setPasswords(self, passwords):
 		self.passwords = passwords
 
@@ -420,6 +432,7 @@ class RegistrationScreen(tk.CTkFrame):
 class PasswordManagementScreen(tk.CTkFrame):
 	def __init__(self, parent, controller, height, width, socket):
 		tk.CTkFrame.__init__(self, parent, height=height, width=width)
+		self.token = None
 		self.username = ""
 		self.passwords = []
 		self.socket = socket
@@ -481,7 +494,7 @@ class PasswordManagementScreen(tk.CTkFrame):
 		self.errorLabel.configure(text="")
 		self.successLabel.configure(text="")
 		self.loadingLabel.configure(text="Loading...")
-		data = {"type": "Get passwords", "username": self.username}
+		data = {"type": "Get passwords", "token": self.token, "username": self.username}
 		msg = sendAndReceiveMsg(self.socket, data, 4096)
 		if isJson(msg):
 			passwords = json.loads(msg)
@@ -496,18 +509,19 @@ class PasswordManagementScreen(tk.CTkFrame):
 		else:
 			self.loadingLabel.configure(text="")
 			self.successLabel.configure(text="")
-			self.errorLabel.configure(text="Corrupted data in server")
+			self.errorLabel.configure(text=msg)
 			
-	# send user back to login screen
+	# logout (restart the program)
 	def logout(self):
-		self.controller.hideFrame(PasswordManagementScreen)
-		self.controller.showFrame(LoginScreen)
-		self.controller.setUsernameForFrame(PasswordManagementScreen, "")
-		self.controller.setUsernameForFrame(ViewPasswordsScreen, "")
+		os.execv(sys.executable, ['python'] + sys.argv)
 
 	# set the username
 	def setUsername(self, username):
 		self.username = username
+
+	# set the token
+	def setToken(self, token):
+		self.token = token
 
 	# generate password and update the appropriate fiels with true password/encoded password
 	def passwordGenerator(self):
@@ -538,7 +552,8 @@ class PasswordManagementScreen(tk.CTkFrame):
 		self.successLabel.configure(text="")
 		self.loadingLabel.configure(text="Loading...")
 		data = {
-				"type": "Save password", 
+				"type": "Save password",
+				"token": self.token, 
 				"password": self.passwordField.get(), 
 				"username": self.username, 
 				"label": self.generatedPasswordLabelEntry.get()
@@ -608,10 +623,13 @@ class LoginScreen(tk.CTkFrame):
 		self.loadingLabel.configure(text="Loading...")
 		data = {"type": "Login", "username": self.userEntry.get(), "password": self.passwordEntry.get()}
 		msg = sendAndReceiveMsg(self.socket, data, 1024)
-		if msg == "Login successful":
+		if "Login successful" in msg:
+			login, token = msg.split(":")
 			self.errorLabel.configure(text="")
 			self.loadingLabel.configure(text="")
+			self.controller.setTokenForFrame(PasswordManagementScreen, token)
 			self.controller.setUsernameForFrame(PasswordManagementScreen, self.userEntry.get())
+			self.controller.setTokenForFrame(ViewPasswordsScreen, token)
 			self.controller.setUsernameForFrame(ViewPasswordsScreen, self.userEntry.get())
 			self.controller.hideFrame(LoginScreen)
 			self.controller.createFrame(PasswordManagementScreen, 0, 0, (25, 25), 25)

@@ -1,5 +1,18 @@
 import json
 import fasteners
+import os
+from itsdangerous import URLSafeTimedSerializer
+from dotenv import load_dotenv
+
+
+# read secrets from the env file
+def readSecrets(file, key):
+	load_dotenv(file)
+	return os.getenv(key)
+
+# get the serializer
+def getSerializer():
+	return URLSafeTimedSerializer(readSecrets("secrets.env", "SERIALIZER_KEY"))
 
 # helper function to determine if given input is valid json format or not
 def isJson(input):

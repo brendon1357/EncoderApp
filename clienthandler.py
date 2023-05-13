@@ -8,7 +8,8 @@ import json
 import re
 import time
 from cryptography.fernet import Fernet
-from staticlibrary import isJson
+from itsdangerous import SignatureExpired, BadSignature
+from staticlibrary import isJson, getSerializer
 from db import getDB
 from logger import Logger
 
@@ -138,7 +139,8 @@ class HandleClient(threading.Thread):
 				if hashedPassword == hashedInputPassword.decode():
 					print("Client " + self.address[0] + " [" + username + "]" + " successfully logged in")
 					self.logger.info("Client " + self.address[0] + " [" + username + "]" + " successfully logged in")
-					self.sock.sendall(b'Login successful')
+					token = getSerializer().dumps(username)
+					self.sock.sendall(b'Login successful:' + token.encode())
 				else:
 					print("Client " + self.address[0] + " failed to login username or password does not exist")
 					self.logger.warning("Client " + self.address[0] + " failed to login username or password does not exist")
@@ -164,7 +166,7 @@ class HandleClient(threading.Thread):
 			self.logger.warning("Client " + self.address[0] + " [" + username + "]" + " attempted to save an invalid password (invalid length)")
 			self.sock.sendall(b'Password must be between 8 and 32 characters inclusive')
 			return
-		elif len(label) >=50:
+		elif len(label) >= 50:
 			print("Client " + self.address[0] + " [" + username + "]" + " attempted to save a password with a label over 50 characters")
 			self.logger.warning("Client " + self.address[0] + " [" + username + "]" + " attempted to save a password with a label over 50 characters")
 			self.sock.sendall(b'Label must be 50 characters or less')
@@ -371,6 +373,16 @@ class HandleClient(threading.Thread):
 			self.logger.error(e)
 			return None
 
+	# authenticate token
+	def authenticated(self, token):
+		try:
+			getSerializer().loads(token, max_age=1800)
+			return True
+		except SignatureExpired:
+			return False
+		except BadSignature:
+			return False
+
 	# delete the given password for the given user
 	def deletePassword(self, username, password):
 		print("Client " + self.address[0] + " [" + username + "]" + " attempted to delete a password")
@@ -428,12 +440,21 @@ class HandleClient(threading.Thread):
 				break 
 
 			if isJson(msg):
-				jsonData = json.loads(msg)
+				jsonData = json.loads(msg) 
 				if not self.checkRateLimit(jsonData["type"]):
 					print("Client " + self.address[0] + " tried to perform the same operation too frequently")
 					self.logger.warning("Client " + self.address[0] + " tried to perform the same operation too frequently")
 					self.sock.sendall(b'Too many requests, please wait at least 3 seconds')
 					continue
+
+				self.lastRequestTime[jsonData["type"]] = time.time()
+				# authenticate the token if they are requesting token restricted data
+				if "token" in jsonData:
+					if not self.authenticated(jsonData["token"]):
+						print("Client " + self.address[0] + " session has been invalidated")
+						self.logger.info("Client " + self.address[0] + " session has been invalidated")
+						self.sock.sendall(b'Session no longer valid, logout and login again')
+						continue
 				
 				username = jsonData["username"].lower()
 				if jsonData["type"] == "Register":
@@ -464,8 +485,6 @@ class HandleClient(threading.Thread):
 				elif jsonData["type"] == "Delete password":
 					password = jsonData["password"]
 					self.deletePassword(username, password)
-
-				self.lastRequestTime[jsonData["type"]] = time.time()
 			else:
 				print("Client " + self.address[0] + " [" + username + "]" + " sent an invalid request")
 				self.logger.warning("Client " + self.address[0] + " [" + username + "]" + " sent an invalid request")

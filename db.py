@@ -1,11 +1,6 @@
-import os
 import mysql.connector
-from dotenv import load_dotenv, set_key
+from staticlibrary import readSecrets
 
-# read secrets from the env file
-def readSecrets(file, key):
-	load_dotenv(file)
-	return os.getenv(key)
 
 # connect to the database and return connection instance
 def getDB():

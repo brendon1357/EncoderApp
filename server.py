@@ -2,7 +2,7 @@ import socket
 import ssl
 import threading
 from clienthandler import HandleClient
-from db import readSecrets
+from staticlibrary import readSecrets
 from logger import Logger
 
 # the server class
