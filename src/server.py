@@ -12,9 +12,9 @@ class Server():
 		self.s.bind(('127.0.0.1', 33333))
 		self.s.listen()
 		self.sslContext = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
-		self.sslContext.load_cert_chain('server_cert.pem', keyfile='server_key.pem', password=readSecrets("secrets.env", "KEYFILE_PASS").encode())
+		self.sslContext.load_cert_chain('../resources/server_cert.pem', keyfile='../resources/server_key.pem', password=readSecrets("../resources/secrets.env", "KEYFILE_PASS").encode())
 
-		loggerObject = Logger("logfile.log")
+		loggerObject = Logger("../resources/logfile.log")
 		self.logger = loggerObject.getLogger()
 
 	# keep listening for client connections and create a thread for each client

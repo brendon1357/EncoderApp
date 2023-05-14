@@ -10,7 +10,7 @@ import os
 import sys
 from tkinter import messagebox
 from functools import partial
-from staticlibrary import isJson, sendAndReceiveMsg, getInstanceLock
+from staticlibrary import isJson, sendAndReceiveMsg, getInstanceLock, clearLabels, setLabel
 
 
 # the root window of the application
@@ -235,23 +235,17 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 
 	# send a request to modify/update a label for a saved password
 	def sendModifyRequestToServer(self, label, enteredInput):
-		self.successLabel.configure(text="")
-		self.errorLabel.configure(text="")
-		self.loadingLabel.configure(text="Loading...")
+		setLabel(self.loadingLabel, "Loading...", [self.errorLabel, self.successLabel])
 		data = {"type": "Modify label", "token": self.token, "username": self.username, "newLabel": enteredInput, "oldLabel": label.cget("text")}
 		msg = sendAndReceiveMsg(self.socket, data, 1024)
 		if msg == "Label updated":
-			self.errorLabel.configure(text="")
-			self.loadingLabel.configure(text="")
-			self.successLabel.configure(text="Updated successfully")
+			setLabel(self.successLabel, "Updated successfully", [self.errorLabel, self.loadingLabel])
 			label.configure(text=enteredInput)
 		else:
-			self.loadingLabel.configure(text="")
-			self.successLabel.configure(text="")
-			self.errorLabel.configure(text=msg)
+			setLabel(self.errorLabel, msg, [self.successLabel, self.loadingLabel])
 
 	# prompt the user to confirm deletion of password and send request in a new thread
-	def deletePassword(self, passwordEntry, event):
+	def deletePassword(self, passwordEntry, event): 
 		if len(passwordEntry.get()) <= 32:
 			self.successLabel.configure(text="")
 			self.errorLabel.configure(text="Can only delete password before decryption")
@@ -271,17 +265,13 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 
 	# send a request to delete the requested saved password
 	def sendDeleteRequestToServer(self, passwordEntry):
-		self.successLabel.configure(text="")
-		self.errorLabel.configure(text="")
-		self.loadingLabel.configure(text="Loading...")
+		setLabel(self.loadingLabel, "Loading...", [self.errorLabel, self.successLabel])
 		data = {"type": "Delete password", "token": self.token, "username": self.username, "password": passwordEntry.get()}
 		msg = sendAndReceiveMsg(self.socket, data, 4096)
 		if isJson(msg):
 			jsonData = json.loads(msg)
 			if jsonData["msg"] == "Password deleted successfully":
-				self.errorLabel.configure(text="")
-				self.successLabel.configure(text="")
-				self.loadingLabel.configure(text="")
+				clearLabels([self.errorLabel, self.successLabel, self.loadingLabel])
 				if len(jsonData["passwords"]) > 0:
 					self.successLabel.configure(text=jsonData["msg"])
 				for widget in self.winfo_children():
@@ -294,23 +284,19 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 					widget.destroy()
 				self.displayPasswords(jsonData["passwords"])
 			else:
-				self.loadingLabel.configure(text="")
-				self.successLabel.configure(text="")
-				self.errorLabel.configure(text=jsonData["msg"])
+				setLabel(self.errorLabel, msg, [self.successLabel, self.loadingLabel])
 		else:
-			self.loadingLabel.configure(text="")
-			self.successLabel.configure(text="")
-			self.errorLabel.configure(text=msg)
+			setLabel(self.errorLabel, msg, [self.successLabel, self.loadingLabel])
 
 	# send a request to decrypt given password
 	def decryptPassword(self, passwordEntry):
+		setLabel(self.loadingLabel, "Loading...", [self.errorLabel, self.successLabel])
 		data = {"type": "Decrypt password", "token": self.token, "username": self.username, "password": passwordEntry.get()}
 		msg = sendAndReceiveMsg(self.socket, data, 1024)
 		if msg == "Already decrypted":
 			return
 		elif msg == "Too many requests too quickly":
-			self.successLabel.configure(text="")
-			self.errorLabel.configure(text=msg)
+			setLabel(self.errorLabel, msg, [self.successLabel, self.loadingLabel])
 			return
 
 		if isJson(msg):
@@ -320,14 +306,11 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 				passwordEntry.delete(0, len(passwordEntry.get()))
 				passwordEntry.insert(0, jsonData["password"])
 				passwordEntry.configure(state="readonly")
-				self.successLabel.configure(text="")
-				self.errorLabel.configure(text="")
+				clearLabels([self.errorLabel, self.successLabel, self.loadingLabel])
 			else:
-				self.successLabel.configure(text="")
-				self.errorLabel.configure(text=msg)
+				setLabel(self.errorLabel, msg, [self.successLabel, self.loadingLabel])
 		else:
-			self.successLabel.configure(text="")
-			self.errorLabel.configure(text=msg)
+			setLabel(self.errorLabel, msg, [self.successLabel, self.loadingLabel])
 
 	# method to start decrypting password in a separate thread
 	def startDecryptThread(self, listPassword):
@@ -354,8 +337,7 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 
 	# go back to the password management screen
 	def goBack(self):
-		self.successLabel.configure(text="")
-		self.errorLabel.configure(text="")
+		clearLabels([self.errorLabel, self.successLabel])
 		self.controller.hideFrame(ViewPasswordsScreen)
 		self.controller.showFrame(PasswordManagementScreen)
 
@@ -407,27 +389,19 @@ class RegistrationScreen(tk.CTkFrame):
 	def loginScreen(self):
 		self.controller.hideFrame(RegistrationScreen)
 		self.controller.showFrame(LoginScreen)
-		self.errorLabel.configure(text="")
-		self.successLabel.configure(text="")
-		self.loadingLabel.configure(text="")
+		clearLabels([self.errorLabel, self.successLabel, self.loadingLabel])
 		self.userEntry.delete(0, len(self.userEntry.get()))
 		self.passwordEntry.delete(0, len(self.passwordEntry.get()))
 
 	# send a request to the server to add the user to the database
 	def createUser(self):
-		self.errorLabel.configure(text="")
-		self.successLabel.configure(text="")
-		self.loadingLabel.configure(text="Loading...")
+		setLabel(self.loadingLabel, "Loading...", [self.errorLabel, self.successLabel])
 		data = {"type": "Register", "username": self.userEntry.get(), "password": self.passwordEntry.get()}
 		msg = sendAndReceiveMsg(self.socket, data, 1024)
 		if msg == "Successfully registered":
-			self.loadingLabel.configure(text="")
-			self.errorLabel.configure(text="")
-			self.successLabel.configure(text=msg)
+			setLabel(self.successLabel, msg, [self.errorLabel, self.loadingLabel])
 		else:
-			self.loadingLabel.configure(text="")
-			self.successLabel.configure(text="")
-			self.errorLabel.configure(text=msg)
+			setLabel(self.errorLabel, msg, [self.successLabel, self.loadingLabel])
 
 
 # main frame after logging in, where the user can generate passwords and decrypt them
@@ -493,9 +467,7 @@ class PasswordManagementScreen(tk.CTkFrame):
 
 	# send a request to retrieve the users passwords so they can be viewed
 	def viewPasswords(self):
-		self.errorLabel.configure(text="")
-		self.successLabel.configure(text="")
-		self.loadingLabel.configure(text="Loading...")
+		setLabel(self.loadingLabel, "Loading...", [self.errorLabel, self.successLabel])
 		data = {"type": "Get passwords", "token": self.token, "username": self.username}
 		msg = sendAndReceiveMsg(self.socket, data, 4096)
 		if isJson(msg):
@@ -505,13 +477,9 @@ class PasswordManagementScreen(tk.CTkFrame):
 			self.controller.hideFrame(PasswordManagementScreen)
 			self.controller.setupPasswordDisplay(passwords)
 			self.controller.showFrame(ViewPasswordsScreen)
-			self.loadingLabel.configure(text="")
-			self.errorLabel.configure(text="")
-			self.successLabel.configure(text="")
+			clearLabels([self.errorLabel, self.successLabel, self.loadingLabel])
 		else:
-			self.loadingLabel.configure(text="")
-			self.successLabel.configure(text="")
-			self.errorLabel.configure(text=msg)
+			setLabel(self.errorLabel, msg, [self.successLabel, self.loadingLabel])
 			
 	# logout (restart the program)
 	def logout(self):
@@ -550,9 +518,7 @@ class PasswordManagementScreen(tk.CTkFrame):
 
 	# send a request to the server to save the password
 	def savePassword(self):
-		self.errorLabel.configure(text="")
-		self.successLabel.configure(text="")
-		self.loadingLabel.configure(text="Loading...")
+		setLabel(self.loadingLabel, "Loading...", [self.errorLabel, self.successLabel])
 		data = {
 				"type": "Save password",
 				"token": self.token, 
@@ -562,13 +528,9 @@ class PasswordManagementScreen(tk.CTkFrame):
 		}
 		msg = sendAndReceiveMsg(self.socket, data, 1024)
 		if msg == "Password saved":
-			self.loadingLabel.configure(text="")
-			self.errorLabel.configure(text="")
-			self.successLabel.configure(text=msg)
+			setLabel(self.successLabel, msg, [self.errorLabel, self.loadingLabel])
 		else:
-			self.loadingLabel.configure(text="")
-			self.successLabel.configure(text="")
-			self.errorLabel.configure(text=msg)
+			setLabel(self.errorLabel, msg, [self.successLabel, self.loadingLabel])
 
 
 # the login frame
@@ -615,20 +577,18 @@ class LoginScreen(tk.CTkFrame):
 	def registrationScreen(self):
 		self.controller.hideFrame(LoginScreen)
 		self.controller.showFrame(RegistrationScreen)
-		self.errorLabel.configure(text="")
+		clearLabels([self.errorLabel, self.loadingLabel])
 		self.userEntry.delete(0, len(self.userEntry.get()))
 		self.passwordEntry.delete(0, len(self.passwordEntry.get()))
 		
 	# send a request to the server to login the user
 	def loginSuccess(self):
-		self.errorLabel.configure(text="")
-		self.loadingLabel.configure(text="Loading...")
+		setLabel(self.loadingLabel, "Loading...", [self.errorLabel])
 		data = {"type": "Login", "username": self.userEntry.get(), "password": self.passwordEntry.get()}
 		msg = sendAndReceiveMsg(self.socket, data, 1024)
 		if "Login successful" in msg:
 			login, token = msg.split(":")
-			self.errorLabel.configure(text="")
-			self.loadingLabel.configure(text="")
+			clearLabels([self.errorLabel, self.loadingLabel])
 			self.controller.setTokenForFrame(PasswordManagementScreen, token)
 			self.controller.setUsernameForFrame(PasswordManagementScreen, self.userEntry.get())
 			self.controller.setTokenForFrame(ViewPasswordsScreen, token)
@@ -638,8 +598,7 @@ class LoginScreen(tk.CTkFrame):
 			self.userEntry.delete(0, len(self.userEntry.get()))
 			self.passwordEntry.delete(0, len(self.passwordEntry.get()))
 		else:
-			self.loadingLabel.configure(text="")
-			self.errorLabel.configure(text=msg)
+			setLabel(self.errorLabel, msg, [self.loadingLabel])
 
 
 # start the client instance
@@ -654,7 +613,7 @@ if __name__== "__main__":
 			# bind to ip and port
 			s.connect(('127.0.0.1', 33333))
 
-			sslContext = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile="trust_store/server_cert.pem")
+			sslContext = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile="../resources/trust_store/server_cert.pem")
 			sslSock = sslContext.wrap_socket(s, server_hostname="PWManage")
 		except Exception as e:
 			print(e)

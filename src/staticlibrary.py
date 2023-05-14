@@ -39,10 +39,20 @@ def sendAndReceiveMsg(socket, givenData, bufferSize):
 		print("Unexpected Error: {}".format(e))
 		return "An unexpected error occurred"
 
-# check if an instance of the program is already running
+# try to acquire lock at temp file location to check if an instance of the program is already running
 def getInstanceLock():
 	lock = fasteners.InterProcessLock("C:/tmp/app.lock")
 	acquireLock = lock.acquire(blocking=False)
 	if acquireLock:
 		return lock
 	return None
+
+# clear all of the labels given (set their text to an empty string)
+def clearLabels(labels):
+	for label in labels:
+		label.configure(text="")
+
+# set the given label and clear all other labels
+def setLabel(label, txt, labelsToClear):
+	label.configure(text=txt)
+	clearLabels(labelsToClear)

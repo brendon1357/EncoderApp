@@ -3,3 +3,7 @@ secrets.env
 trust_store
 *.pem
 *.bat
+*.log
+*.spec
+build
+dist

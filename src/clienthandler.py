@@ -14,6 +14,21 @@ from db import getDB
 from logger import Logger
 
 
+# custom exception class for an invalid request
+class InvalidRequest(Exception):
+	pass
+
+
+# custom exception class for unauthenticated user
+class AuthenticationError(Exception):
+	pass
+
+
+# custom exception class for timeout error
+class UserTimeoutError(Exception):
+	pass
+
+
 # Class to handle clients in a new thread for each client
 class HandleClient(threading.Thread):
 	def __init__(self, clientSock, address):
@@ -432,60 +447,70 @@ class HandleClient(threading.Thread):
 	# keep listening for messages from the client and handle requests
 	def run(self):
 		while True:
-			msg = self.sock.recv(2048).decode()
-			if not msg:
-				print("Client disconnected from IP: " + self.address[0])
-				self.logger.info("Client disconnected from IP: " + self.address[0])
-				self.sock.close()
-				break 
+			try:
+				msg = self.sock.recv(2048).decode()
+				if not msg:
+					print("Client disconnected from IP: " + self.address[0])
+					self.logger.info("Client disconnected from IP: " + self.address[0])
+					self.sock.close()
+					break 
+				# validate the request (every request should include a type and the user's username)
+				if isJson(msg):
+					jsonData = json.loads(msg)
+					if not "type" in jsonData or not "username" in jsonData:
+						raise InvalidRequest()
 
-			if isJson(msg):
-				jsonData = json.loads(msg) 
-				if not self.checkRateLimit(jsonData["type"]):
-					print("Client " + self.address[0] + " tried to perform the same operation too frequently")
-					self.logger.warning("Client " + self.address[0] + " tried to perform the same operation too frequently")
-					self.sock.sendall(b'Too many requests, please wait at least 3 seconds')
-					continue
+					if not self.checkRateLimit(jsonData["type"]):
+						raise UserTimeoutError()
 
-				self.lastRequestTime[jsonData["type"]] = time.time()
-				# authenticate the token if they are requesting token restricted data
-				if "token" in jsonData:
-					if not self.authenticated(jsonData["token"]):
-						print("Client " + self.address[0] + " session has been invalidated")
-						self.logger.info("Client " + self.address[0] + " session has been invalidated")
-						self.sock.sendall(b'Session no longer valid, logout and login again')
-						continue
-				
-				username = jsonData["username"].lower()
-				if jsonData["type"] == "Register":
-					password = jsonData["password"]
-					self.createUser(username, password)
+					username = jsonData["username"].lower()
+					self.lastRequestTime[jsonData["type"]] = time.time()	
+					if jsonData["type"] != "Register" and jsonData["type"] != "Login":
+						if not self.authenticated(jsonData["token"]):
+							raise AuthenticationError()
 
-				elif jsonData["type"] == "Login":
-					password = jsonData["password"]
-					self.authenticateUser(username, password)
+						if jsonData["type"] == "Save password":
+							password = jsonData["password"]
+							label = jsonData["label"].strip()
+							self.savePassword(username, password, label)
 
-				elif jsonData["type"] == "Save password":
-					password = jsonData["password"]
-					label = jsonData["label"].strip()
-					self.savePassword(username, password, label)
+						elif jsonData["type"] == "Get passwords":
+							self.sendPasswords(username)
 
-				elif jsonData["type"] == "Get passwords":
-					self.sendPasswords(username)
+						elif jsonData["type"] == "Decrypt password":
+							password = jsonData["password"]
+							self.decryptPassword(username, password)
 
-				elif jsonData["type"] == "Decrypt password":
-					password = jsonData["password"]
-					self.decryptPassword(username, password)
+						elif jsonData["type"] == "Modify label":
+							newLabel = jsonData["newLabel"].strip()
+							oldLabel = jsonData["oldLabel"].strip()
+							self.updateLabel(username, newLabel, oldLabel)
 
-				elif jsonData["type"] == "Modify label":
-					newLabel = jsonData["newLabel"].strip()
-					oldLabel = jsonData["oldLabel"].strip()
-					self.updateLabel(username, newLabel, oldLabel)
+						elif jsonData["type"] == "Delete password":
+							password = jsonData["password"]
+							self.deletePassword(username, password)
+					else:
+						if jsonData["type"] == "Register":
+							password = jsonData["password"]
+							self.createUser(username, password)
 
-				elif jsonData["type"] == "Delete password":
-					password = jsonData["password"]
-					self.deletePassword(username, password)
-			else:
+						elif jsonData["type"] == "Login":
+							password = jsonData["password"]
+							self.authenticateUser(username, password)
+				else:
+					raise InvalidRequest()			
+			except InvalidRequest as e:
 				print("Client " + self.address[0] + " [" + username + "]" + " sent an invalid request")
-				self.logger.warning("Client " + self.address[0] + " [" + username + "]" + " sent an invalid request")
+				self.logger.errpr("Client " + self.address[0] + " [" + username + "]" + " sent an invalid request")
 				self.sock.sendall(b'Server could not handle request')
+			except AuthenticationError as e:
+				print("Client " + self.address[0] + " session has been invalidated")
+				self.logger.info("Client " + self.address[0] + " session has been invalidated")
+				self.sock.sendall(b'Session no longer valid, logout and login again')
+			except UserTimeoutError as e:
+				print("Client " + self.address[0] + " tried to perform the same operation too frequently")
+				self.logger.warning("Client " + self.address[0] + " tried to perform the same operation too frequently")
+				self.sock.sendall(b'Too many requests, please wait at least 3 seconds')
+			except Exception as e:
+				print("Unexpected error: " + str(e))
+				self.logger.error("Unexpected error: " + str(e))
