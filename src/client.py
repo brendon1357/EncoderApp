@@ -11,6 +11,9 @@ import sys
 from functools import partial
 from staticlibrary import isJson, sendAndReceiveMsg, getInstanceLock
 
+"""
+IMPORTANT NOTE: Rebuild GUI using grid when finished all functionality and polishing
+"""
 
 # the root window of the application
 class Root(tk.CTk):
@@ -425,8 +428,9 @@ class PasswordManagementScreen(tk.CTkFrame):
 		headerLabel = tk.CTkLabel(self, text="Manage Your Passwords", font=("Arial", 30, "bold"))
 		headerLabel.place(relx=0.50, rely=0.10, anchor=tk.CENTER)
 
-		passwordInfoLabel = tk.CTkLabel(self, text="Click generate or enter a password (Max 32 chars)", font=("Arial", 14, "bold"))
-		passwordInfoLabel.place(relx=0.79, rely=0.24, anchor=tk.E)
+		#FIXME: Using absolute positioning here, using rel position for everything else (rebuild using grid eventually)
+		passwordInfoLabel = tk.CTkLabel(self, text="Generate or enter a password", width=250, font=("Arial", 14, "bold"))
+		passwordInfoLabel.place(x=197, y=108)
 
 		lengthLabel = tk.CTkLabel(self, text="Length: ", font=("Arial", 14, "bold"))
 		lengthLabel.place(relx=0.65, rely=0.37, anchor=tk.CENTER)
@@ -447,8 +451,8 @@ class PasswordManagementScreen(tk.CTkFrame):
 			command=lambda: self.passwordGenerator())
 		generateButton.place(relx=0.04, rely=0.30, anchor=tk.W)
 
-		generatedPasswordLabel = tk.CTkLabel(self, text="What's this password for?", font=("Arial", 14, "bold"))
-		generatedPasswordLabel.place(relx=0.565, rely=0.52, anchor=tk.E)
+		generatedPasswordLabel = tk.CTkLabel(self, text="Whats this password for?", width=250, font=("Arial", 14, "bold"))
+		generatedPasswordLabel.place(x=180, y=248)
 
 		self.generatedPasswordLabelEntry = tk.CTkEntry(self, placeholder_text="Enter a label for this password", width=450, height=32, fg_color="#363636")
 		self.generatedPasswordLabelEntry.place(relx=0.95, rely=0.58, anchor=tk.E)

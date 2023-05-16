@@ -322,9 +322,9 @@ class HandleClient(threading.Thread):
 				self.logger.info("Client " + self.address[0] + " [" + username + "]" + " updated label successfully")
 				self.sock.sendall(b'Label updated')
 			else:
-				print("Client " + self.address[0] + " [" + username + "]" + " failed to update label not unique")
-				self.logger.warning("Client " + self.address[0] + " [" + username + "]" + " failed to update label not unique")
-				self.sock.sendall(b'Update failed, enter unique label')
+				print("Client " + self.address[0] + " [" + username + "]" + " failed to update label")
+				self.logger.warning("Client " + self.address[0] + " [" + username + "]" + " failed to update label")
+				self.sock.sendall(b'Updating label failed')
 		except Exception as e:
 			self.sock.sendall(b'Server error')
 			print("Error: {}".format(e))
