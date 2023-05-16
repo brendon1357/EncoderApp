@@ -1,6 +1,7 @@
 import json
 import fasteners
 import os
+import customtkinter as tk
 from itsdangerous import URLSafeTimedSerializer
 from dotenv import load_dotenv
 
@@ -46,13 +47,3 @@ def getInstanceLock():
 	if acquireLock:
 		return lock
 	return None
-
-# clear all of the labels given (set their text to an empty string)
-def clearLabels(labels):
-	for label in labels:
-		label.configure(text="")
-
-# set the given label and clear all other labels
-def setLabel(label, txt, labelsToClear):
-	label.configure(text=txt)
-	clearLabels(labelsToClear)
