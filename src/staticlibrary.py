@@ -7,16 +7,16 @@ from dotenv import load_dotenv
 
 
 # read secrets from the env file
-def readSecrets(file, key):
+def readSecrets(file, key) -> str:
 	load_dotenv(file)
 	return os.getenv(key)
 
 # get the serializer
-def getSerializer():
+def getSerializer() -> object:
 	return URLSafeTimedSerializer(readSecrets("secrets.env", "SERIALIZER_KEY"))
 
 # helper function to determine if given input is valid json format or not
-def isJson(input):
+def isJson(input) -> bool:
 	try:
 		json.loads(input)
 		return True
@@ -24,7 +24,7 @@ def isJson(input):
 		return False
 
 # helper function to send a msg over given socket with given data and return the response
-def sendAndReceiveMsg(socket, givenData, bufferSize):
+def sendAndReceiveMsg(socket, givenData, bufferSize) -> str:
 	if socket == None:
 		return "Not connected to server" 
 	try:
@@ -41,9 +41,8 @@ def sendAndReceiveMsg(socket, givenData, bufferSize):
 		return "An unexpected error occurred"
 
 # try to acquire lock at temp file location to check if an instance of the program is already running
-def getInstanceLock():
+def getInstanceLock() -> object:
 	lock = fasteners.InterProcessLock("C:/tmp/app.lock")
 	acquireLock = lock.acquire(blocking=False)
 	if acquireLock:
 		return lock
-	return None

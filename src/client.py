@@ -50,46 +50,46 @@ class Root(tk.CTk):
 		self.hideFrame(ViewPasswordsScreen)
 
 	# create a frame and add it to the grid at given row and col
-	def createFrame(self, name, row, col, padx, pady):
+	def createFrame(self, name, row, col, padx, pady) -> None:
 		frame = self.frames[name]
 		frame.grid(row=row, column=col, padx=padx, pady=pady)
 		if name == LoginScreen:
 			self.centerWindow()
 
 	# add a frame to frames
-	def addFrame(self, name, obj):
+	def addFrame(self, name, obj) -> None:
 		self.frames[name] = obj
 
 	# show the given frame
-	def showFrame(self, name):
+	def showFrame(self, name) -> None:
 		frame = self.frames[name]
 		frame.focus()
 		frame.grid()
 
 	# hide the given frame
-	def hideFrame(self, name):
+	def hideFrame(self, name) -> None:
 		frame = self.frames[name]
 		frame.grid_remove()
 
 	# destroy the given frame
-	def destroyFrame(self, name):
+	def destroyFrame(self, name) -> None:
 		frame = self.frames[name]
 		frame.destroy()
 
 	# set the username for the given frame
-	def setUsernameForFrame(self, name, username):
+	def setUsernameForFrame(self, name, username) -> None:
 		self.frames[name].setUsername(username)
 
 	# set the access token for frame
-	def setTokenForFrame(self, name, token):
+	def setTokenForFrame(self, name, token) -> None:
 		self.frames[name].setToken(token)
 
 	# call the displayPasswords method for the ViewPasswordsScreen class
-	def setupPasswordDisplay(self, passwords):
+	def setupPasswordDisplay(self, passwords) -> None:
 		self.frames[ViewPasswordsScreen].displayPasswords(passwords)
 
 	# place window at the center of the screen
-	def centerWindow(self):
+	def centerWindow(self) -> None:
 		self.update_idletasks()
 		width = self.winfo_reqwidth()
 		height = self.winfo_reqheight()
@@ -116,14 +116,14 @@ class ConfirmationWindow(tk.CTkToplevel):
 		noButton = tk.CTkButton(self, text="No", font=("Arial", 14, "bold"), cursor="hand2", width=150, command=lambda: self.noClicked())
 		noButton.place(relx=0.96, rely=0.65, anchor=tk.E)
 
-	def yesClicked(self):
+	def yesClicked(self) -> None:
 		self.confirmed = True
 		self.destroy()
 
-	def noClicked(self):
+	def noClicked(self) -> None:
 		self.destroy()
 
-	def isConfirmed(self):
+	def isConfirmed(self) -> bool:
 		return self.confirmed
 
 
@@ -148,17 +148,17 @@ class InputWindow(tk.CTkToplevel):
 		cancelButton = tk.CTkButton(self, text="Cancel", font=("Arial", 14, "bold"), cursor="hand2", width=150, command=lambda: self.cancelClicked())
 		cancelButton.place(relx=0.97, rely=0.75, anchor=tk.E)
 
-	def okClicked(self):
+	def okClicked(self) -> None:
 		self.enteredLabel = self.entry.get()
 		self.destroy()
 
-	def cancelClicked(self):
+	def cancelClicked(self) -> None:
 		self.destroy()
 
-	def getInput(self):
+	def getInput(self) -> str:
 		if len(self.enteredLabel) > 0:
 			return self.enteredLabel
-		return None
+		return ""
 
 
 # the frame to view all of the users saved passwords
@@ -210,7 +210,7 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 			deleteLabel.bind("<Button-1>", command=partial(self.deletePassword, listPassword))
 
 	# prompt the user to input a new label and start a new thread to send that new label in a request to the server
-	def modifyLabel(self, label, event):
+	def modifyLabel(self, label, event) -> None:
 		inputWindow = InputWindow()
 		inputWindow.transient(self)
 		inputWindow.grab_set()
@@ -225,12 +225,12 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 
 		enteredInput = inputWindow.getInput()
 		# if the user clicks cancel or dialog input is somehow empty then don't send any requests
-		if enteredInput is None:
+		if enteredInput == "":
 			return
 		threading.Thread(target=self.sendModifyRequestToServer, args=(label, enteredInput)).start()
 
 	# send a request to modify/update a label for a saved password
-	def sendModifyRequestToServer(self, label, enteredInput):
+	def sendModifyRequestToServer(self, label, enteredInput) -> None:
 		self.informationLabel.configure(text="Loading...")
 		self.informationLabel.configure(text_color="green")
 		data = {"type": "Modify label", "token": self.token, "username": self.username, "newLabel": enteredInput, "oldLabel": label.cget("text")}
@@ -244,7 +244,7 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 			self.informationLabel.configure(text_color="red")
 
 	# prompt the user to confirm deletion of password and send request in a new thread
-	def deletePassword(self, passwordEntry, event): 
+	def deletePassword(self, passwordEntry, event) -> None: 
 		if len(passwordEntry.get()) <= 32:
 			self.informationLabel.configure(text="Can only delete password before decryption")
 			self.informationLabel.configure(text_color="red")
@@ -263,7 +263,7 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 			threading.Thread(target=self.sendDeleteRequestToServer, args=(passwordEntry,)).start()
 
 	# send a request to delete the requested saved password
-	def sendDeleteRequestToServer(self, passwordEntry):
+	def sendDeleteRequestToServer(self, passwordEntry) -> None:
 		self.informationLabel.configure(text="Loading...")
 		self.informationLabel.configure(text_color="green")
 		data = {"type": "Delete password", "token": self.token, "username": self.username, "password": passwordEntry.get()}
@@ -291,7 +291,7 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 			self.informationLabel.configure(text_color="red")
 
 	# send a request to decrypt given password
-	def decryptPassword(self, passwordEntry):
+	def decryptPassword(self, passwordEntry) -> None:
 		self.informationLabel.configure(text="Loading...")
 		self.informationLabel.configure(text_color="green")
 		data = {"type": "Decrypt password", "token": self.token, "username": self.username, "password": passwordEntry.get()}
@@ -321,30 +321,30 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 			self.informationLabel.configure(text_color="red")
 
 	# method to start decrypting password in a separate thread
-	def startDecryptThread(self, listPassword):
+	def startDecryptThread(self, listPassword) -> None:
 		threading.Thread(target=self.decryptPassword, args=(listPassword,)).start()
 
 	# copy password to clipboard
-	def copyPassword(self, passwordEntry):
+	def copyPassword(self, passwordEntry) -> None:
 		self.clipboard_clear()
 		self.clipboard_append(passwordEntry.get())
 		self.informationLabel.configure(text="Password copied, you can now paste anywhere")
 		self.informationLabel.configure(text_color="green")
 
 	# set the username
-	def setUsername(self, username):
+	def setUsername(self, username) -> None:
 		self.username = username
 
 	# set the token
-	def setToken(self, token):
+	def setToken(self, token) -> None:
 		self.token = token
 
 	# set the passwords
-	def setPasswords(self, passwords):
+	def setPasswords(self, passwords) -> None:
 		self.passwords = passwords
 
 	# go back to the password management screen
-	def goBack(self):
+	def goBack(self) -> None:
 		self.informationLabel.configure(text="")
 		self.controller.hideFrame(ViewPasswordsScreen)
 		self.controller.showFrame(PasswordManagementScreen)
@@ -388,7 +388,7 @@ class RegistrationScreen(tk.CTkFrame):
 		self.passwordEntry.bind("<Return>", lambda event: threading.Thread(target=self.createUser).start())
 
 	# show the login screen
-	def loginScreen(self):
+	def loginScreen(self) -> None:
 		self.controller.hideFrame(RegistrationScreen)
 		self.controller.showFrame(LoginScreen)
 		self.informationLabel.configure(text="")
@@ -396,7 +396,7 @@ class RegistrationScreen(tk.CTkFrame):
 		self.passwordEntry.delete(0, len(self.passwordEntry.get()))
 
 	# send a request to the server to add the user to the database
-	def createUser(self):
+	def createUser(self) -> None:
 		self.informationLabel.configure(text="Loading...")
 		self.informationLabel.configure(text_color="green")
 		data = {"type": "Register", "username": self.userEntry.get(), "password": self.passwordEntry.get()}
@@ -466,7 +466,7 @@ class PasswordManagementScreen(tk.CTkFrame):
 		viewButton.place(relx=0.50, rely=0.82, anchor=tk.CENTER)
 
 	# send a request to retrieve the users passwords so they can be viewed
-	def viewPasswords(self):
+	def viewPasswords(self) -> None:
 		self.informationLabel.configure(text="Loading...")
 		self.informationLabel.configure(text_color="green")
 		data = {"type": "Get passwords", "token": self.token, "username": self.username}
@@ -484,19 +484,19 @@ class PasswordManagementScreen(tk.CTkFrame):
 			self.informationLabel.configure(text_color="#ff4242")
 			
 	# logout (restart the program)
-	def logout(self):
+	def logout(self) -> None:
 		os.execv(sys.executable, ['python'] + sys.argv)
 
 	# set the username
-	def setUsername(self, username):
+	def setUsername(self, username) -> None:
 		self.username = username
 
 	# set the token
-	def setToken(self, token):
+	def setToken(self, token) -> None:
 		self.token = token
 
 	# generate password and update the appropriate fiels with true password/encoded password
-	def passwordGenerator(self):
+	def passwordGenerator(self) -> None:
 		length = int(self.slider.get())
 		# get random password of given length with letters, digits, and different symbols
 		validSymbols = "@-!$#&~_?%()^<>"
@@ -519,7 +519,7 @@ class PasswordManagementScreen(tk.CTkFrame):
 		self.passwordField.insert(0, password_str)
 
 	# send a request to the server to save the password
-	def savePassword(self):
+	def savePassword(self) -> None:
 		self.informationLabel.configure(text="Loading...")
 		self.informationLabel.configure(text_color="green")
 		data = {
@@ -576,7 +576,7 @@ class LoginScreen(tk.CTkFrame):
 		self.passwordEntry.bind("<Return>", lambda event: threading.Thread(target=self.loginSuccess).start())
 
 	# show the registration screen
-	def registrationScreen(self):
+	def registrationScreen(self) -> None:
 		self.controller.hideFrame(LoginScreen)
 		self.controller.showFrame(RegistrationScreen)
 		self.informationLabel.configure(text="")
@@ -584,7 +584,7 @@ class LoginScreen(tk.CTkFrame):
 		self.passwordEntry.delete(0, len(self.passwordEntry.get()))
 		
 	# send a request to the server to login the user
-	def loginSuccess(self):
+	def loginSuccess(self) -> None:
 		self.informationLabel.configure(text_color="green")
 		self.informationLabel.configure(text="Loading...")
 		data = {"type": "Login", "username": self.userEntry.get(), "password": self.passwordEntry.get()}

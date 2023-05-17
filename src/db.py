@@ -3,7 +3,7 @@ from staticlibrary import readSecrets
 
 
 # connect to the database and return connection instance
-def getDB():
+def getDB() -> object:
 	USER = readSecrets("../resources/secrets.env", "DATABASE_USER")
 	PASSWORD = readSecrets("../resources/secrets.env", "DATABASE_PASSWORD")
 

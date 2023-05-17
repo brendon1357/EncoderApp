@@ -11,5 +11,5 @@ class Logger():
 		self.logger = logging.getLogger()
 		self.logger.setLevel(logging.DEBUG)
 
-	def getLogger(self):
+	def getLogger(self) -> object:
 		return self.logger

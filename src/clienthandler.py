@@ -42,9 +42,9 @@ class HandleClient(threading.Thread):
 		self.logger = loggerObject.getLogger()
  
 	# check the last request sent and prevent multiple requests too frequently
-	def checkRateLimit(self, requestType):
+	def checkRateLimit(self, requestType) -> bool:
 		if requestType in self.lastRequestTime:
-			timeSinceLast = time.time() - self.lastRequestTime[requestType]
+			timeSinceLast: int = time.time() - self.lastRequestTime[requestType]
 			if self.userOnTimeout():
 				return False
 			if timeSinceLast < 0.25:
@@ -53,13 +53,13 @@ class HandleClient(threading.Thread):
 		return True
 
 	# check if the user has been put on a temporary timeout after doing frequent requests
-	def userOnTimeout(self):
+	def userOnTimeout(self) -> bool:
 		if time.time() - self.lastTimeoutTime < 3:
 			return True
 		return False
 
 	# insert username, password hash, and salt into database
-	def insertUser(self, username, password):
+	def insertUser(self, username, password) -> None:
 		connection = getDB()
 		if connection is None:
 			print("Could not connect to database")
@@ -86,7 +86,7 @@ class HandleClient(threading.Thread):
 			self.logger.error(e)
 
 	# adds the user to the database if the user doesn't already exist
-	def createUser(self, username, password):
+	def createUser(self, username, password) -> None:
 		if username == "" or password == "":
 			print("Client " + self.address[0] + " failed to register empty input(s)")
 			self.logger.warning("Client " + self.address[0] + " failed to register empty input(s)")
@@ -128,7 +128,7 @@ class HandleClient(threading.Thread):
 			self.logger.error(e)
 
 	# check for user in database
-	def authenticateUser(self, username, password):
+	def authenticateUser(self, username, password) -> None:
 		if username == "" or password == "":
 			print("Client " + self.address[0] + " failed to login empty input(s)")
 			self.logger.warning("Client " + self.address[0] + " failed to login empty input(s)")
@@ -170,7 +170,7 @@ class HandleClient(threading.Thread):
 			self.logger.error(e)
 
 	# save the given password and password label in the database for the given user
-	def savePassword(self, username, password, label):
+	def savePassword(self, username, password, label) -> None:
 		if password == "" or label == "":
 			print("Client " + self.address[0] + " [" + username + "]" + " attempted to save an empty password or label")
 			self.logger.warning("Client " + self.address[0] + " [" + username + "]" + " attempted to save an empty password or label")
@@ -239,14 +239,14 @@ class HandleClient(threading.Thread):
 			self.logger.error(e)
 
 	# return true if given string is a valid password otherwise return false
-	def validPassword(self, str):
+	def validPassword(self, str) -> bool:
 		if len(str) < 8:
 			return False
 		symbols = r'[#%!^&()<>?_=+@~-]'
 		return bool(re.search(symbols, str))
 
 	# send the users passwords over socket to them
-	def sendPasswords(self, username):
+	def sendPasswords(self, username) -> None:
 		print("Client " + self.address[0] + " [" + username + "]" + " attempted to retrieve passwords")
 		self.logger.info("Client " + self.address[0] + " [" + username + "]" + " attempted to retrieve passwords")
 		connection = getDB()
@@ -281,7 +281,7 @@ class HandleClient(threading.Thread):
 			self.logger.error(e)
 
 	# update password label in database
-	def updateLabel(self, username, newLabel, oldLabel):
+	def updateLabel(self, username, newLabel, oldLabel) -> None:
 		if newLabel == "":
 			print("Client " + self.address[0] + " [" + username + "]" + " attempted to update label with empty string")
 			self.logger.warning("Client " + self.address[0] + " [" + username + "]" + " attempted to update label with empty string")
@@ -299,7 +299,7 @@ class HandleClient(threading.Thread):
 		if connection is None:
 			print("Could not connect to database")
 			self.logger.critical("Could not connect to database")
-			return None
+			return
 		try:
 			userID = self.getUserID(username)
 			if userID is None:
@@ -331,7 +331,7 @@ class HandleClient(threading.Thread):
 			self.logger.error(e)
 
 	# decrypt the given password for the given user and send it over socket
-	def decryptPassword(self, username, password):
+	def decryptPassword(self, username, password) -> None:
 		if len(password) <= 32:
 			print("Client " + self.address[0] + " [" + username + "]" + " password was already decrypted")
 			self.logger.warning("Client " + self.address[0] + " [" + username + "]" + " password was already decrypted")
@@ -372,7 +372,7 @@ class HandleClient(threading.Thread):
 			self.logger.error(e)
 
 	# get user id for given username
-	def getUserID(self, username):
+	def getUserID(self, username) -> int:
 		connection = getDB()
 		if connection is None:
 			print("Could not connect to database")
@@ -389,7 +389,7 @@ class HandleClient(threading.Thread):
 			return None
 
 	# authenticate token
-	def authenticated(self, token):
+	def authenticated(self, token) -> bool:
 		try:
 			getSerializer().loads(token, max_age=1800)
 			return True
@@ -399,7 +399,7 @@ class HandleClient(threading.Thread):
 			return False
 
 	# delete the given password for the given user
-	def deletePassword(self, username, password):
+	def deletePassword(self, username, password) -> None:
 		print("Client " + self.address[0] + " [" + username + "]" + " attempted to delete a password")
 		self.logger.info("Client " + self.address[0] + " [" + username + "]" + " attempted to delete a password")
 		connection = getDB()
@@ -445,7 +445,7 @@ class HandleClient(threading.Thread):
 			return None
 
 	# keep listening for messages from the client and handle requests
-	def run(self):
+	def run(self) -> None:
 		while True:
 			try:
 				msg = self.sock.recv(2048).decode()

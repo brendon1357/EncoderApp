@@ -18,7 +18,7 @@ class Server():
 		self.logger = loggerObject.getLogger()
 
 	# keep listening for client connections and create a thread for each client
-	def start(self):
+	def start(self) -> None:
 		print("Server started...")
 		while True:
 			conn, clientAddress = self.s.accept()
