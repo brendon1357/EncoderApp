@@ -139,7 +139,7 @@ class HandleClient(threading.Thread):
 		self.logger.info("Client " + self.address[0] + " attempted to login with username: " + username)
 		connection = getDB()
 		if connection is None:
-			print("Could not connect to database")
+			print("Could not connect to database") 
 			self.logger.critical("Could not connect to database")
 			return
 		try:

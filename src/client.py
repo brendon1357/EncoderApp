@@ -10,6 +10,7 @@ import os
 import sys
 from functools import partial
 from staticlibrary import isJson, sendAndReceiveMsg, getInstanceLock
+from concurrent.futures import ThreadPoolExecutor
 
 """
 IMPORTANT NOTE: Rebuild GUI using grid when finished all functionality and polishing
@@ -241,13 +242,13 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 			label.configure(text=enteredInput)
 		else:
 			self.informationLabel.configure(text=msg)
-			self.informationLabel.configure(text_color="red")
+			self.informationLabel.configure(text_color="#ff4242")
 
 	# prompt the user to confirm deletion of password and send request in a new thread
 	def deletePassword(self, passwordEntry, event) -> None: 
 		if len(passwordEntry.get()) <= 32:
 			self.informationLabel.configure(text="Can only delete password before decryption")
-			self.informationLabel.configure(text_color="red")
+			self.informationLabel.configure(text_color="#ff4242")
 			return
 		confirmationWindow = ConfirmationWindow()
 		confirmationWindow.transient(self)
@@ -260,20 +261,29 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 		confirmationWindow.geometry('+{}+{}'.format(rootCenterX - confirmationWindowWidth // 2, rootCenterY - confirmationWindowHeight // 2))
 		self.wait_window(confirmationWindow)
 		if confirmationWindow.isConfirmed():
-			threading.Thread(target=self.sendDeleteRequestToServer, args=(passwordEntry,)).start()
+			#threading.Thread(target=self.sendDeleteRequestToServer, args=(passwordEntry,)).start()
+			self.sendDeleteRequestToServer(passwordEntry)
 
 	# send a request to delete the requested saved password
 	def sendDeleteRequestToServer(self, passwordEntry) -> None:
 		self.informationLabel.configure(text="Loading...")
 		self.informationLabel.configure(text_color="green")
 		data = {"type": "Delete password", "token": self.token, "username": self.username, "password": passwordEntry.get()}
-		msg = sendAndReceiveMsg(self.socket, data, 4096)
+		# run this in a separate thread so I can update the GUI in main thread based on result
+		with ThreadPoolExecutor(max_workers=1) as executor:
+			future = executor.submit(sendAndReceiveMsg, self.socket, data, 4096)
+		msg = future.result()
+		self.refreshPasswordList(msg)
+
+	# refresh the password list by updating all of the widgets
+	def refreshPasswordList(self, msg) -> None:
 		if isJson(msg):
 			jsonData = json.loads(msg)
 			if jsonData["msg"] == "Password deleted successfully":
-				self.informationLabel.configre(text="")
+				self.informationLabel.configure(text="")
 				if len(jsonData["passwords"]) > 0:
-					self.successLabel.configure(text=jsonData["msg"])
+					self.informationLabel.configure(text=jsonData["msg"])
+					self.informationLabel.configure(text_color="green")
 				for widget in self.winfo_children():
 					if isinstance(widget, tk.CTkLabel):
 						if widget.cget("text_color") == "green" or widget.cget("text_color") == "#ff4242":
@@ -284,11 +294,11 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 					widget.destroy()
 				self.displayPasswords(jsonData["passwords"])
 			else:
-				self.informationLabel.configure(text=msg)
-			self.informationLabel.configure(text_color="red")
+				self.informationLabel.configure(text=jsonData["msg"])
+				self.informationLabel.configure(text_color="#ff4242")
 		else:
 			self.informationLabel.configure(text=msg)
-			self.informationLabel.configure(text_color="red")
+			self.informationLabel.configure(text_color="#ff4242")
 
 	# send a request to decrypt given password
 	def decryptPassword(self, passwordEntry) -> None:
@@ -298,11 +308,11 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 		msg = sendAndReceiveMsg(self.socket, data, 1024)
 		if msg == "Already decrypted":
 			self.informationLabel.configure(text="Password already decrypted, you can copy it")
-			self.informationLabel.configure(text_color="red")
+			self.informationLabel.configure(text_color="#ff4242")
 			return
 		elif msg == "Too many requests too quickly":
 			self.informationLabel.configure(text=msg)
-			self.informationLabel.configure(text_color="red")
+			self.informationLabel.configure(text_color="#ff4242")
 			return
 
 		if isJson(msg):
@@ -315,10 +325,10 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 				self.informationLabel.configure(text="")
 			else:
 				self.informationLabel.configure(text=msg)
-				self.informationLabel.configure(text_color="red")
+				self.informationLabel.configure(text_color="#ff4242")
 		else:
 			self.informationLabel.configure(text=msg)
-			self.informationLabel.configure(text_color="red")
+			self.informationLabel.configure(text_color="#ff4242")
 
 	# method to start decrypting password in a separate thread
 	def startDecryptThread(self, listPassword) -> None:
@@ -406,7 +416,7 @@ class RegistrationScreen(tk.CTkFrame):
 			self.informationLabel.configure(text_color="green")
 		else:
 			self.informationLabel.configure(text=msg)
-			self.informationLabel.configure(text_color="red")
+			self.informationLabel.configure(text_color="#ff4242")
 
 
 # main frame after logging in, where the user can generate passwords and decrypt them
