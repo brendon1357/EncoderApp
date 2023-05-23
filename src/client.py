@@ -631,7 +631,7 @@ if __name__== "__main__":
 			s = socket.socket()
 			s.settimeout(15)
 			# bind to ip and port
-			s.connect(('ec2-54-234-223-220.compute-1.amazonaws.com', 33333))
+			s.connect(('127.0.0.1', 33333))
 
 			sslContext = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile="../resources/trust_store/server_cert.pem")
 			sslSock = sslContext.wrap_socket(s, server_hostname="PWManage")
