@@ -12,10 +12,6 @@ from functools import partial
 from staticlibrary import isJson, sendAndReceiveMsg, getInstanceLock
 from concurrent.futures import ThreadPoolExecutor
 
-"""
-IMPORTANT NOTE: Rebuild GUI using grid when finished all functionality and polishing
-"""
-
 # the root window of the application
 class Root(tk.CTk):
 	def __init__(self, socket):
@@ -174,8 +170,11 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 		self.controller = controller
 		self.passwords = []
 
+		self.bottomGrid = tk.CTkFrame(self, fg_color="#333333", width=0, height=0)
+		self.bottomGrid.grid(row=1, column=0)
+
 		self.informationLabel = tk.CTkLabel(self, text="", font=("Arial", 14, "bold"))
-		self.informationLabel.grid(row=0, column=0, padx=(150, 0))
+		self.informationLabel.grid(row=0, column=0)
 
 		backButton = tk.CTkButton(self, text="Back", font=("Arial", 16, "bold"), width=95, fg_color="#15a100", hover_color="#107d00", 
 			command=lambda: self.goBack())
@@ -187,8 +186,8 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 			encryptedPassword = password["encryptedPassword"]
 			label = password["label"]
 
-			listLabel = tk.CTkLabel(self, text=label, font=("Arial", 14, "bold"), cursor="hand2")
-			deleteLabel = tk.CTkLabel(self, text="Delete", font=("Arial", 14, "bold"), cursor="hand2", text_color="red")
+			listLabel = tk.CTkLabel(self.bottomGrid, text=label, font=("Arial", 14, "bold"), cursor="hand2")
+			deleteLabel = tk.CTkLabel(self.bottomGrid, text="Delete", font=("Arial", 14, "bold"), cursor="hand2", text_color="red")
 			if i == 1:
 				listLabel.grid(row=i, column=0, pady=(0, 0), sticky="w")
 				deleteLabel.grid(row=i, column=0, pady=(0, 0), sticky="e")
@@ -196,16 +195,16 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 				listLabel.grid(row=i, column=0, pady=(40, 0), sticky="w")
 				deleteLabel.grid(row=i, column=0, pady=(40, 0), sticky="e")
   
-			listPassword = tk.CTkEntry(self, width=500)
+			listPassword = tk.CTkEntry(self.bottomGrid, width=500)
 			listPassword.insert(tk.END, encryptedPassword)
 			listPassword.configure(state="readonly")
 			listPassword.grid(row=i+1, column=0, pady=(0, 40))
 
-			decryptButton = tk.CTkButton(self, text="Decrypt", font=("Arial", 16, "bold"), height=32, 
+			decryptButton = tk.CTkButton(self.bottomGrid, text="Decrypt", font=("Arial", 16, "bold"), height=32, 
 			command=partial(self.startDecryptThread, listPassword))
 			decryptButton.grid(row=i+1, column=1, pady=(0, 40), padx=20)
 
-			copyButton = tk.CTkButton(self, text="Copy", font=("Arial", 16, "bold"), height=32, 
+			copyButton = tk.CTkButton(self.bottomGrid, text="Copy", font=("Arial", 16, "bold"), height=32, 
 			command=partial(self.copyPassword, listPassword))
 			copyButton.grid(row=i+1, column=2, pady=(0, 40), padx=(0, 20))
 
@@ -286,13 +285,7 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 				if len(jsonData["passwords"]) > 0:
 					self.informationLabel.configure(text=jsonData["msg"])
 					self.informationLabel.configure(text_color="green")
-				for widget in self.winfo_children():
-					if isinstance(widget, tk.CTkLabel):
-						if widget.cget("text_color") == "green" or widget.cget("text_color") == "#ff4242":
-							continue
-					if isinstance(widget, tk.CTkButton):
-						if widget.cget("text") == "Back":
-							continue
+				for widget in self.bottomGrid.winfo_children():
 					widget.destroy()
 				self.displayPasswords(jsonData["passwords"])
 			else:
@@ -638,7 +631,7 @@ if __name__== "__main__":
 			s = socket.socket()
 			s.settimeout(15)
 			# bind to ip and port
-			s.connect(('127.0.0.1', 33333))
+			s.connect(('ec2-54-234-223-220.compute-1.amazonaws.com', 33333))
 
 			sslContext = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile="../resources/trust_store/server_cert.pem")
 			sslSock = sslContext.wrap_socket(s, server_hostname="PWManage")
