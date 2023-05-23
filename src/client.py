@@ -33,11 +33,11 @@ class Root(tk.CTk):
 
 		loginFrame = LoginScreen(container, self, 400, 600, self.socket)
 		self.frames[LoginScreen] = loginFrame
-		self.createFrame(LoginScreen, 0, 0, 75, 75)
+		self.createFrame(LoginScreen, 0, 0, 100, 75)
 
 		registrationFrame = RegistrationScreen(container, self, 400, 600, self.socket)
 		self.frames[RegistrationScreen] = registrationFrame
-		self.createFrame(RegistrationScreen, 0, 0, 75, 75)
+		self.createFrame(RegistrationScreen, 0, 0, 100, 75)
 		self.hideFrame(RegistrationScreen)
 
 		passwordManagementFrame = PasswordManagementScreen(container, self, 500, 700, self.socket)
@@ -99,6 +99,7 @@ class Root(tk.CTk):
 		self.geometry('+{}+{}'.format(x, y))
 
 
+# a popup window to ask user for confirmation when deleting a password
 class ConfirmationWindow(tk.CTkToplevel):
 	def __init__(self):
 		tk.CTkToplevel.__init__(self)
@@ -128,6 +129,7 @@ class ConfirmationWindow(tk.CTkToplevel):
 		return self.confirmed
 
 
+# a popup input window to ask for a new password label
 class InputWindow(tk.CTkToplevel):
 	def __init__(self):
 		tk.CTkToplevel.__init__(self)
@@ -165,7 +167,7 @@ class InputWindow(tk.CTkToplevel):
 # the frame to view all of the users saved passwords
 class ViewPasswordsScreen(tk.CTkScrollableFrame):
 	def __init__(self, parent, controller, height, width, socket):
-		tk.CTkScrollableFrame.__init__(self, parent, height=height, width=width)
+		tk.CTkScrollableFrame.__init__(self, parent, height=height, width=width, fg_color="#333333")
 		self.token = None
 		self.socket = socket
 		self.username = ""
@@ -363,34 +365,40 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 # the frame for registering an account
 class RegistrationScreen(tk.CTkFrame):
 	def __init__(self, parent, controller, height, width, socket):
-		tk.CTkFrame.__init__(self, parent, height=height, width=width)
+		tk.CTkFrame.__init__(self, parent, height=height, width=width, fg_color="#333333")
 		self.socket = socket
 		self.controller = controller
 
-		headerLabel = tk.CTkLabel(self, text="Create an Account Below", font=("Arial", 32, "bold"))
-		headerLabel.place(relx=0.50, rely=0.15, anchor=tk.CENTER)
+		headerLabel = tk.CTkLabel(self, text="Create Account Below", font=("Arial", 32, "bold"))
+		headerLabel.grid(row=0, column=0, padx=(100, 100), pady=(40, 0))
 
 		usernameLabel = tk.CTkLabel(self, text="Username", font=("Arial", 16, "bold"))
-		usernameLabel.place(relx=0.28, rely=0.33, anchor=tk.CENTER)
+		usernameLabel.grid(row=1, column=0, padx=(100, 0), pady=(40, 0), sticky="W")
 
 		passwordLabel = tk.CTkLabel(self, text="Password", font=("Arial", 16, "bold"))
-		passwordLabel.place(relx=0.28, rely=0.50, anchor=tk.CENTER)
+		passwordLabel.grid(row=3, column=0, padx=(100, 0), pady=(15, 0), sticky="W")
+
+		retypePasswordLabel = tk.CTkLabel(self, text="Retype Password", font=("Arial", 16, "bold"))
+		retypePasswordLabel.grid(row=5, column=0, padx=(100, 0), pady=(15, 0), sticky="W")
 
 		self.informationLabel = tk.CTkLabel(self, text="", font=("Arial", 14, "bold"))
-		self.informationLabel.place(relx=0.50, rely=0.66, anchor=tk.CENTER)
+		self.informationLabel.grid(row=7, column=0, pady=(10, 0))
 
 		self.userEntry = tk.CTkEntry(self, placeholder_text="Enter username here", width=350, font=("Arial", 14))
-		self.userEntry.place(relx=0.50, rely=0.40, anchor=tk.CENTER)
+		self.userEntry.grid(row=2, column=0)
 
 		self.passwordEntry = tk.CTkEntry(self, placeholder_text="Enter password here", width=350, font=("Arial", 14), show="*")
-		self.passwordEntry.place(relx=0.50, rely=0.57, anchor=tk.CENTER)
+		self.passwordEntry.grid(row=4, column=0)
+
+		self.retypePasswordEntry = tk.CTkEntry(self, placeholder_text="Retype password here", width=350, font=("Arial", 14), show="*")
+		self.retypePasswordEntry.grid(row=6, column=0)
 
 		registerButton = tk.CTkButton(self, text="Register", font=("Arial", 20, "bold"), width=350, height=32, 
 			command=lambda: threading.Thread(target=self.createUser).start())
-		registerButton.place(relx=0.50, rely=0.75, anchor=tk.CENTER)
+		registerButton.grid(row=8, column=0, pady=(10, 0))
 
 		loginLabel = tk.CTkLabel(self, text="Click here to login", font=("Arial", 16, "bold"), cursor="hand2", text_color="#4aa8ff")
-		loginLabel.place(relx=0.50, rely=0.88, anchor=tk.CENTER)
+		loginLabel.grid(row=9, column=0, pady=(20, 30))
 
 		loginLabel.bind("<Button-1>", lambda event: self.loginScreen())
 
@@ -422,58 +430,63 @@ class RegistrationScreen(tk.CTkFrame):
 # main frame after logging in, where the user can generate passwords and decrypt them
 class PasswordManagementScreen(tk.CTkFrame):
 	def __init__(self, parent, controller, height, width, socket):
-		tk.CTkFrame.__init__(self, parent, height=height, width=width)
+		tk.CTkFrame.__init__(self, parent, height=height, width=width, fg_color="#333333")
 		self.token = None
 		self.username = ""
 		self.passwords = []
 		self.socket = socket
 		self.controller = controller
 		sliderValue = tk.IntVar()
-		sliderValue.set(8)
+		sliderValue.set(8) 
 
 		logoutButton = tk.CTkButton(self, text="Logout", font=("Arial", 16, "bold"), width=95, fg_color="#ff392b", hover_color="#960a00", cursor="hand2", 
 			command=lambda: self.logout())
-		logoutButton.place(relx=0.02, rely=0.05, anchor=tk.W)
+		logoutButton.grid(row=0, column=0, padx=(10, 0), pady=(10, 0), sticky="W")
 
 		headerLabel = tk.CTkLabel(self, text="Manage Your Passwords", font=("Arial", 30, "bold"))
-		headerLabel.place(relx=0.50, rely=0.10, anchor=tk.CENTER)
+		headerLabel.grid(row=1, column=0,pady=(10, 40))
 
-		#FIXME: Using absolute positioning here, using rel position for everything else (rebuild using grid eventually)
-		passwordInfoLabel = tk.CTkLabel(self, text="Generate or enter a password", width=250, font=("Arial", 14, "bold"))
-		passwordInfoLabel.place(x=197, y=108)
+		generatePasswordGrid = tk.CTkFrame(self, fg_color="#333333", width=0, height=0)
+		generatePasswordGrid.grid(row=2, column=0) 
 
-		lengthLabel = tk.CTkLabel(self, text="Length: ", font=("Arial", 14, "bold"))
-		lengthLabel.place(relx=0.65, rely=0.37, anchor=tk.CENTER)
+		passwordInfoLabel = tk.CTkLabel(generatePasswordGrid, text="Generate or enter a password", font=("Arial", 14, "bold"))
+		passwordInfoLabel.grid(row=0, column=1, padx=(3, 0), sticky="W")
 
-		sliderValLabel = tk.CTkLabel(self, textvariable=sliderValue, font=("Arial", 14, "bold"))
-		sliderValLabel.place(relx=0.70, rely=0.37, anchor=tk.CENTER)
+		lengthLabel = tk.CTkLabel(generatePasswordGrid, text="Length: ", font=("Arial", 14, "bold"))
+		lengthLabel.grid(row=2, column=1, padx=(10, 0), pady=(10, 0))
+
+		sliderValLabel = tk.CTkLabel(generatePasswordGrid, textvariable=sliderValue, font=("Arial", 14, "bold"))
+		sliderValLabel.grid(row=2, column=1, padx=(80, 0), pady=(10, 0))
 
 		self.informationLabel = tk.CTkLabel(self, text="", font=("Arial", 14, "bold"))
-		self.informationLabel.place(relx=0.50, rely=0.70, anchor=tk.CENTER)
+		self.informationLabel.grid(row=4, column=0, pady=(25, 0))
 
-		self.slider = tk.CTkSlider(self, from_=8, to=32, number_of_steps=24, variable=sliderValue)
-		self.slider.place(relx=0.45, rely=0.37, anchor=tk.CENTER)        
+		self.slider = tk.CTkSlider(generatePasswordGrid, from_=8, to=32, number_of_steps=24, variable=sliderValue)
+		self.slider.grid(row=2, column=1, sticky="W", pady=(10, 0))
 
-		self.passwordField = tk.CTkEntry(self, placeholder_text="Generate or enter a password here", width=450, height=32, fg_color="#363636")
-		self.passwordField.place(relx=0.95, rely=0.30, anchor=tk.E)
-
-		generateButton = tk.CTkButton(self, text="Generate", font=("Arial", 16, "bold"), width=160, height=32, 
+		generateButton = tk.CTkButton(generatePasswordGrid, text="Generate", font=("Arial", 16, "bold"), width=160, height=32, 
 			command=lambda: self.passwordGenerator())
-		generateButton.place(relx=0.04, rely=0.30, anchor=tk.W)
+		generateButton.grid(row=1, column=0, padx=25)
 
-		generatedPasswordLabel = tk.CTkLabel(self, text="Whats this password for?", width=250, font=("Arial", 14, "bold"))
-		generatedPasswordLabel.place(x=180, y=248)
+		self.passwordField = tk.CTkEntry(generatePasswordGrid, placeholder_text="Generate or enter a password here", width=450, height=32, fg_color="#363636")
+		self.passwordField.grid(row=1, column=1, padx=(0, 25), sticky="W")
 
-		self.generatedPasswordLabelEntry = tk.CTkEntry(self, placeholder_text="Enter a label for this password", width=450, height=32, fg_color="#363636")
-		self.generatedPasswordLabelEntry.place(relx=0.95, rely=0.58, anchor=tk.E)
+		savePasswordGrid = tk.CTkFrame(self, fg_color="#333333", width=0, height=0)
+		savePasswordGrid.grid(row=3, column=0) 
 
-		savePasswordButton = tk.CTkButton(self, text="Save Password", font=("Arial", 16, "bold"), width=160, height=32, 
+		generatedPasswordLabel = tk.CTkLabel(savePasswordGrid, text="Whats this password for?", font=("Arial", 14, "bold"))
+		generatedPasswordLabel.grid(row=0, column=1, padx=(3, 0), pady=(50, 0), sticky="W")
+
+		self.generatedPasswordLabelEntry = tk.CTkEntry(savePasswordGrid, placeholder_text="Enter a label for this password", width=450, height=32, fg_color="#363636")
+		self.generatedPasswordLabelEntry.grid(row=1, column=1, padx=(0, 25), sticky="W")
+
+		savePasswordButton = tk.CTkButton(savePasswordGrid, text="Save Password", font=("Arial", 16, "bold"), width=160, height=32, 
 			command=lambda: threading.Thread(target=self.savePassword).start())
-		savePasswordButton.place(relx=0.04, rely=0.58, anchor=tk.W)
+		savePasswordButton.grid(row=1, column=0, padx=25)
 
 		viewButton = tk.CTkButton(self, text="Access Your Data", font=("Arial", 16, "bold"), width=180, height=32,
 			command=lambda: threading.Thread(target=self.viewPasswords).start())
-		viewButton.place(relx=0.50, rely=0.82, anchor=tk.CENTER)
+		viewButton.grid(row=5, column=0, pady=(20, 40))
 
 	# send a request to retrieve the users passwords so they can be viewed
 	def viewPasswords(self) -> None:
@@ -547,38 +560,38 @@ class PasswordManagementScreen(tk.CTkFrame):
 			self.informationLabel.configure(text=msg)
 			self.informationLabel.configure(text_color="#ff4242")
 
-
+ 
 # the login frame
 class LoginScreen(tk.CTkFrame):
 	def __init__(self, parent, controller, height, width, socket):
-		tk.CTkFrame.__init__(self, parent, height=height, width=width)
+		tk.CTkFrame.__init__(self, parent, height=height, width=width, fg_color="#333333")
 		self.socket = socket
 		self.controller = controller
 
 		headerLabel = tk.CTkLabel(self, text="Login to Your Account", font=("Arial", 32, "bold"))
-		headerLabel.place(relx=0.50, rely=0.15, anchor=tk.CENTER)
+		headerLabel.grid(row=0, column=0, padx=(100, 100), pady=(40, 0))
 
 		usernameLabel = tk.CTkLabel(self, text="Username", font=("Arial", 16, "bold"))
-		usernameLabel.place(relx=0.28, rely=0.33, anchor=tk.CENTER)
+		usernameLabel.grid(row=1, column=0, padx=(100, 0), pady=(40, 0), sticky="W")
 
 		passwordLabel = tk.CTkLabel(self, text="Password", font=("Arial", 16, "bold"))
-		passwordLabel.place(relx=0.28, rely=0.50, anchor=tk.CENTER)
+		passwordLabel.grid(row=3, column=0, padx=(100, 0), pady=(15, 0), sticky="W")
 
 		self.userEntry = tk.CTkEntry(self, placeholder_text="Enter username here", width=350, font=("Arial", 14))
-		self.userEntry.place(relx=0.50, rely=0.40, anchor=tk.CENTER)
+		self.userEntry.grid(row=2, column=0)
 
 		self.passwordEntry = tk.CTkEntry(self, placeholder_text="Enter password here", width=350, font=("Arial", 14), show="*")
-		self.passwordEntry.place(relx=0.50, rely=0.57, anchor=tk.CENTER)
+		self.passwordEntry.grid(row=4, column=0)
 
 		loginButton = tk.CTkButton(self, text="Login", font=("Arial", 20, "bold"), width=350, height=32, 
 			command=lambda: threading.Thread(target=self.loginSuccess).start())
-		loginButton.place(relx=0.50, rely=0.75, anchor=tk.CENTER)
+		loginButton.grid(row=6, column=0, pady=(10, 0))
  
 		self.registerLabel = tk.CTkLabel(self, text="Click here to register", font=("Arial", 16, "bold"), cursor="hand2", text_color="#4aa8ff")
-		self.registerLabel.place(relx=0.50, rely=0.88, anchor=tk.CENTER)
+		self.registerLabel.grid(row=7, column=0, pady=(20, 30))
 
 		self.informationLabel = tk.CTkLabel(self, text="", font=("Arial", 14, "bold"))
-		self.informationLabel.place(relx=0.50, rely=0.66, anchor=tk.CENTER)
+		self.informationLabel.grid(row=5, column=0, pady=(10, 0))
 
 		self.registerLabel.bind("<Button-1>", lambda event: self.registrationScreen())
 		
