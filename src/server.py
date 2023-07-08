@@ -7,7 +7,7 @@ from logger import Logger
 
 # the server class
 class Server():
-	def __init__(self):
+	def __init__(self): 
 		self.s = socket.socket()
 		self.s.bind(('127.0.0.1', 33333))
 		self.s.listen()

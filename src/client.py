@@ -14,11 +14,11 @@ from concurrent.futures import ThreadPoolExecutor
 
 # the root window of the application
 class Root(tk.CTk):
-	def __init__(self, socket):
+	def __init__(self):
 		tk.CTk.__init__(self)
 		# dictionary to store all of the frames
 		self.frames = {} 
-		self.socket = socket
+		self.socket = None
 
 		container = tk.CTkFrame(self)
 		self.title("Password Manager")
@@ -27,21 +27,21 @@ class Root(tk.CTk):
 		tk.set_appearance_mode("dark")
 		tk.set_default_color_theme("blue")
 
-		loginFrame = LoginScreen(container, self, 400, 600, self.socket)
+		loginFrame = LoginScreen(container, self, 400, 600)
 		self.frames[LoginScreen] = loginFrame
 		self.createFrame(LoginScreen, 0, 0, 100, 75)
 
-		registrationFrame = RegistrationScreen(container, self, 400, 600, self.socket)
+		registrationFrame = RegistrationScreen(container, self, 400, 600)
 		self.frames[RegistrationScreen] = registrationFrame
 		self.createFrame(RegistrationScreen, 0, 0, 100, 75)
 		self.hideFrame(RegistrationScreen)
 
-		passwordManagementFrame = PasswordManagementScreen(container, self, 500, 700, self.socket)
+		passwordManagementFrame = PasswordManagementScreen(container, self, 500, 700)
 		self.frames[PasswordManagementScreen] = passwordManagementFrame
 		self.createFrame(PasswordManagementScreen, 0, 0, (25, 25), 25)
 		self.hideFrame(PasswordManagementScreen)
 
-		passwordViewFrame = ViewPasswordsScreen(container, self, 500, 825, self.socket)
+		passwordViewFrame = ViewPasswordsScreen(container, self, 500, 825)
 		self.frames[ViewPasswordsScreen] = passwordViewFrame
 		self.createFrame(ViewPasswordsScreen, 0, 0, (25, 25), 25)
 		self.hideFrame(ViewPasswordsScreen)
@@ -80,6 +80,9 @@ class Root(tk.CTk):
 	# set the access token for frame
 	def setTokenForFrame(self, name, token) -> None:
 		self.frames[name].setToken(token)
+
+	def setSocketForFrame(self, name, socket) -> None:
+		self.frames[name].setSocket(socket)
 
 	# call the displayPasswords method for the ViewPasswordsScreen class
 	def setupPasswordDisplay(self, passwords) -> None:
@@ -162,10 +165,10 @@ class InputWindow(tk.CTkToplevel):
 
 # the frame to view all of the users saved passwords
 class ViewPasswordsScreen(tk.CTkScrollableFrame):
-	def __init__(self, parent, controller, height, width, socket):
+	def __init__(self, parent, controller, height, width):
 		tk.CTkScrollableFrame.__init__(self, parent, height=height, width=width, fg_color="#333333")
 		self.token = None
-		self.socket = socket
+		self.socket = None
 		self.username = ""
 		self.controller = controller
 		self.passwords = []
@@ -344,6 +347,10 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 	def setToken(self, token) -> None:
 		self.token = token
 
+	# set the socket
+	def setSocket(self, socket) -> None:
+		self.socket = socket
+
 	# set the passwords
 	def setPasswords(self, passwords) -> None:
 		self.passwords = passwords
@@ -357,9 +364,9 @@ class ViewPasswordsScreen(tk.CTkScrollableFrame):
 
 # the frame for registering an account
 class RegistrationScreen(tk.CTkFrame):
-	def __init__(self, parent, controller, height, width, socket):
+	def __init__(self, parent, controller, height, width):
 		tk.CTkFrame.__init__(self, parent, height=height, width=width, fg_color="#333333")
-		self.socket = socket
+		self.socket = None
 		self.controller = controller
 
 		headerLabel = tk.CTkLabel(self, text="Create Account Below", font=("Arial", 32, "bold"))
@@ -419,15 +426,19 @@ class RegistrationScreen(tk.CTkFrame):
 			self.informationLabel.configure(text=msg)
 			self.informationLabel.configure(text_color="#ff4242")
 
+	# set the socket
+	def setSocket(self, socket) -> None:
+		self.socket = socket
+
 
 # main frame after logging in, where the user can generate passwords and decrypt them
 class PasswordManagementScreen(tk.CTkFrame):
-	def __init__(self, parent, controller, height, width, socket):
+	def __init__(self, parent, controller, height, width):
 		tk.CTkFrame.__init__(self, parent, height=height, width=width, fg_color="#333333")
 		self.token = None
 		self.username = ""
 		self.passwords = []
-		self.socket = socket
+		self.socket = None
 		self.controller = controller
 		sliderValue = tk.IntVar()
 		sliderValue.set(8) 
@@ -511,6 +522,10 @@ class PasswordManagementScreen(tk.CTkFrame):
 	def setToken(self, token) -> None:
 		self.token = token
 
+	# set the socket
+	def setSocket(self, socket) -> None:
+		self.socket = socket
+
 	# generate password and update the appropriate fiels with true password/encoded password
 	def passwordGenerator(self) -> None:
 		length = int(self.slider.get())
@@ -556,9 +571,9 @@ class PasswordManagementScreen(tk.CTkFrame):
  
 # the login frame
 class LoginScreen(tk.CTkFrame):
-	def __init__(self, parent, controller, height, width, socket):
+	def __init__(self, parent, controller, height, width):
 		tk.CTkFrame.__init__(self, parent, height=height, width=width, fg_color="#333333")
-		self.socket = socket
+		self.socket = None
 		self.controller = controller
 
 		headerLabel = tk.CTkLabel(self, text="Login to Your Account", font=("Arial", 32, "bold"))
@@ -594,6 +609,7 @@ class LoginScreen(tk.CTkFrame):
 	# show the registration screen
 	def registrationScreen(self) -> None:
 		self.controller.hideFrame(LoginScreen)
+		self.controller.setSocketForFrame(RegistrationScreen, self.socket)
 		self.controller.showFrame(RegistrationScreen)
 		self.informationLabel.configure(text="")
 		self.userEntry.delete(0, len(self.userEntry.get()))
@@ -603,6 +619,20 @@ class LoginScreen(tk.CTkFrame):
 	def loginSuccess(self) -> None:
 		self.informationLabel.configure(text_color="green")
 		self.informationLabel.configure(text="Loading...")
+
+		sslSock = None
+		try: 
+			s = socket.socket()
+			s.settimeout(10)
+			# bind to ip and port
+			s.connect(('127.0.0.1', 33333))
+
+			sslContext = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile="../resources/trust_store/server_cert.pem")
+			sslSock = sslContext.wrap_socket(s, server_hostname="PWManage")
+			self.socket = sslSock
+		except Exception as e:
+			print(e)
+
 		data = {"type": "Login", "username": self.userEntry.get(), "password": self.passwordEntry.get()}
 		msg = sendAndReceiveMsg(self.socket, data, 1024)
 		if "Login successful" in msg:
@@ -610,8 +640,10 @@ class LoginScreen(tk.CTkFrame):
 			self.informationLabel.configure(text="")
 			self.controller.setTokenForFrame(PasswordManagementScreen, token)
 			self.controller.setUsernameForFrame(PasswordManagementScreen, self.userEntry.get())
+			self.controller.setSocketForFrame(PasswordManagementScreen, self.socket)
 			self.controller.setTokenForFrame(ViewPasswordsScreen, token)
 			self.controller.setUsernameForFrame(ViewPasswordsScreen, self.userEntry.get())
+			self.controller.setSocketForFrame(ViewPasswordsScreen, self.socket)
 			self.controller.hideFrame(LoginScreen)
 			self.controller.createFrame(PasswordManagementScreen, 0, 0, (25, 25), 25)
 			self.userEntry.delete(0, len(self.userEntry.get()))
@@ -626,18 +658,7 @@ if __name__== "__main__":
 	# acquire lock to check if we have a client instance already running
 	lock = getInstanceLock()
 	if lock is not None:
-		sslSock = None
-		try:
-			s = socket.socket()
-			s.settimeout(15)
-			# bind to ip and port
-			s.connect(('127.0.0.1', 33333))
-
-			sslContext = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile="../resources/trust_store/server_cert.pem")
-			sslSock = sslContext.wrap_socket(s, server_hostname="PWManage")
-		except Exception as e:
-			print(e)
-		app = Root(sslSock)
+		app = Root()
 		app.mainloop()
 
 		# release lock when program ends
